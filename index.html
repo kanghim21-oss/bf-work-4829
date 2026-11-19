@@ -1399,7 +1399,7 @@ function renderParts() {
   $('pList').innerHTML = list.map(p => `
     <div class="panel prow" data-id="${esc(p.id)}">
       <div class="pinfo"><span class="pname">${esc(p.name)}${pendP[p.id] ? ' ⏳' : ''}</span></div>
-      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button><b class="pc num ${n(p.count) ? '' : 'zero'}">${n(p.count)}</b><button class="plus" data-pa="+" aria-label="하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button></div>
+      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button><b class="pc num ${n(p.count) ? '' : 'zero'}">${n(p.count)}</b>${isAdmin() ? '<button class="plus" data-pa="+" aria-label="입고 하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button>' : ''}</div>
       <div class="pextra"><span class="holds">${(() => { const o = HOLD[p.id] || {}, a = Object.keys(o).filter(w => o[w] > 0); return a.length ? '👤 ' + a.map(w => `${esc(w)} <b>${o[w]}</b>`).join(' · ') : ''; })()}</span><button class="mvbtn" data-pa="mv">👤 반출/반납</button></div>
     </div>`).join('');
   const em = $('pEmpty'); em.classList.toggle('hidden', list.length > 0 || who);
@@ -1584,11 +1584,13 @@ $('pList').addEventListener('click', e => {
   const b = e.target.closest('[data-pa]'); if (!b) return;
   const id = b.closest('[data-id]').dataset.id, p = findP(id); if (!p) return;
   if (b.dataset.pa === 'mv') return openMove(id);
+  if (!isAdmin() && b.dataset.pa !== '-') return toast('입고·삭제는 박은조·최태영만 가능합니다');
   if (b.dataset.pa === 'x') { if (!confirm(`[${p.name}]\n이 부품을 목록에서 삭제할까요?`)) return; parts = parts.filter(x => x.id !== id); commitP(id, 'del'); }
   else { p.count = Math.max(0, n(p.count) + (b.dataset.pa === '+' ? 1 : -1)); commitP(id, 'up'); }
 });
 $('pEmpty').addEventListener('click', e => { if (e.target.closest('[data-pseed]')) importParts(); });
 function addPart() {
+  if (!isAdmin()) return toast('새 부품 입고는 박은조·최태영만 가능합니다');
   const name = $('newPart').value.trim(); if (!name) return toast('부품 이름을 입력하세요');
   const p = { id: 'p-' + Date.now(), page: S.pg === 'ALL' ? '추가' : S.pg, name, count: 1 };
   parts.push(p); $('newPart').value = ''; commitP(p.id, 'up');
@@ -1710,6 +1712,7 @@ function applyRole() {
   hide('#menu [data-m="audit"]', !adm);
   hide('#menu [data-m="settings"]', Auth.name !== CFG_ADMIN);
   $('monthBtn').classList.toggle('hidden', !adm);
+  $('newPart').closest('.addrow').classList.toggle('hidden', !adm);
   $('logoutBtn').textContent = '🚪 로그아웃 (' + Auth.name + ')';
   $('pill').onclick = Auth.name === CFG_ADMIN ? openSettings : () => toast(Sync.state === 'online' ? '서버와 연결되어 있습니다' : '연결 상태를 확인하는 중입니다');
   if (!adm) S.worker = Auth.name;
