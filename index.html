@@ -1373,15 +1373,17 @@ function buildPrintFree() {
   const rows = freeRows().slice().reverse(); if (!rows.length) return false;
   const fp = freeParts(rows), qty = fp.reduce((a, p) => a + p.qty, 0), amt = fp.reduce((a, p) => a + p.qty * p.price, 0);
   const when = FR.mon ? FR.mon.replace('-', '년 ') + '월' : '전체 기간', who = FR.wk === 'ALL' ? '전체 기사' : FR.wk;
-  const body = rows.map((l, i) => `<tr><td class="r">${i + 1}</td><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason].filter(Boolean).join(' / '))}</td><td>${esc(l.action)}</td><td>${esc((l.usedParts || []).map(u => `${u.name} ×${u.qty}`).join(', '))}</td><td class="r">${(l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0) ? fmt((l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0)) : ''}</td></tr>`).join('');
+  const row = (l, i) => { const t = (l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0); return `<tr><td class="r">${i + 1}</td><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason].filter(Boolean).join(' / '))}</td><td>${esc(l.action)}</td><td>${esc((l.usedParts || []).map(u => `${u.name} ×${u.qty}`).join(', '))}</td><td class="r">${t ? fmt(t) : ''}</td></tr>`; };
+  const colg = '<colgroup><col style="width:4%"><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:17%"><col style="width:16%"><col style="width:16%"><col style="width:8%"></colgroup>';
+  const thead = '<thead><tr><th>No</th><th>날짜</th><th>기사</th><th>주소</th><th>연락처</th><th>모델/접수</th><th>조치내역</th><th>사용부품</th><th>부품금액</th></tr></thead>';
+  const grp = new Map(); rows.forEach(l => { (grp.get(l.worker) || grp.set(l.worker, []).get(l.worker)).push(l); });
+  const tables = [...grp.entries()].map(([w, ls]) => { const wp = freeParts(ls), wq = wp.reduce((a, p) => a + p.qty, 0), wa = wp.reduce((a, p) => a + p.qty * p.price, 0);
+    return `<h1 style="font-size:13px;margin:10px 0 4px">${esc(w)} (${ls.length}건)</h1><table>${colg}${thead}<tbody>${ls.map(row).join('')}</tbody><tfoot><tr><td colspan="7">${esc(w)} 소계</td><td class="r">${wq}개</td><td class="r">${fmt(wa)}</td></tr></tfoot></table>`; }).join('');
   const pr = fp.map(p => `<tr><td>${esc(p.name)}</td><td class="r">${p.price ? fmt(p.price) : ''}</td><td class="r">${p.qty}</td><td class="r">${p.price ? fmt(p.qty * p.price) : ''}</td></tr>`).join('');
   $('printArea').innerHTML = `<div class="phead"><div><h1>귀뚜라미 미추홀 대리점 무상 A/S 내역</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 무상 ${rows.length}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p></div>
   <table class="psign"><tr><th>경리실장</th><th>대 표</th></tr><tr><td></td><td></td></tr></table></div>
-  <table><colgroup><col style="width:4%"><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:17%"><col style="width:16%"><col style="width:16%"><col style="width:8%"></colgroup>
-  <thead><tr><th>No</th><th>날짜</th><th>기사</th><th>주소</th><th>연락처</th><th>모델/접수</th><th>조치내역</th><th>사용부품</th><th>부품금액</th></tr></thead>
-  <tbody>${body}</tbody>
-  <tfoot><tr><td colspan="7">합계</td><td class="r">${qty}개</td><td class="r">${fmt(amt)}</td></tr></tfoot></table>
-  ${fp.length ? `<h1 style="font-size:13px;margin:12px 0 4px">무상 부품 합계</h1><table style="width:60%"><colgroup><col style="width:52%"><col style="width:16%"><col style="width:12%"><col style="width:20%"></colgroup><thead><tr><th>부품명</th><th>단가</th><th>수량</th><th>금액</th></tr></thead><tbody>${pr}</tbody></table>` : ''}`;
+  ${tables}
+  ${fp.length ? `<h1 style="font-size:13px;margin:12px 0 4px">전체 무상 부품 합계 (${rows.length}건 · ${qty}개 · ${fmt(amt)}원)</h1><table style="width:60%"><colgroup><col style="width:52%"><col style="width:16%"><col style="width:12%"><col style="width:20%"></colgroup><thead><tr><th>부품명</th><th>단가</th><th>수량</th><th>금액</th></tr></thead><tbody>${pr}</tbody></table>` : ''}`;
   document.body.classList.add('doprint');
   return true;
 }
@@ -1743,13 +1745,18 @@ function renderFree() {
     <div class="panel tile"><span class="l">무상 부품</span><span class="v num">${fmt(qty)}<small>개</small></span></div>
     <div class="panel tile hero"><span class="l">부품 금액</span><span class="v num">${fmt(amt)}<small>원</small></span></div>`;
   $('frParts').innerHTML = `<b>무상 부품 합계</b>` + (fp.length ? `<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tbody>${fp.map(p => `<tr><td style="padding:5px 0">${esc(p.name)}</td><td style="text-align:right;white-space:nowrap">${p.price ? fmt(p.price) + '원' : ''}</td><td style="text-align:right;width:44px"><b>×${p.qty}</b></td></tr>`).join('')}</tbody></table>` : `<div style="margin-top:6px;color:var(--mute,#888);font-size:13px">앱에서 부품을 골라 등록한 무상 건부터 집계됩니다. (이전 건은 아래 조치내역 참고)</div>`);
-  $('frList').innerHTML = rows.length ? rows.map(l => `<article class="panel card free" data-id="${esc(l.id)}" style="padding:12px">
+  const card = l => `<article class="panel card free" data-id="${esc(l.id)}" style="padding:12px">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>${esc((l.date || '').slice(5))} · ${esc(l.worker)}</b><span class="tag t-free">무상 A/S</span></div>
       <div style="margin-top:4px">${esc(l.address)}${l.phone ? ' · ' + esc(l.phone) : ''}</div>
       <div style="margin-top:4px;font-size:13px;color:var(--mute,#888)">${esc([l.model, l.reason].filter(Boolean).join(' / '))}</div>
       <div style="margin-top:4px;font-size:13px">${esc(l.action)}</div>
       ${(l.usedParts || []).length ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${l.usedParts.map(u => `<span class="tag t-model">${esc(u.name)} ×${u.qty}</span>`).join('')}</div>` : ''}
-    </article>`).join('') : '<div class="panel" style="padding:18px;text-align:center">해당 기간의 무상 건이 없습니다</div>';
+    </article>`;
+  const grp = new Map(); rows.forEach(l => { (grp.get(l.worker) || grp.set(l.worker, []).get(l.worker)).push(l); });
+  $('frList').innerHTML = rows.length ? [...grp.entries()].map(([w, ls]) => {
+    const wp = freeParts(ls), wq = wp.reduce((a, p) => a + p.qty, 0), wa = wp.reduce((a, p) => a + p.qty * p.price, 0);
+    return `<section style="display:grid;gap:8px"><div class="panel" style="padding:12px;background:var(--surface)"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:16px">👤 ${esc(w)}</b><span><b>${ls.length}</b>건 · 부품 <b>${wq}</b>개 · <b>${fmt(wa)}</b>원</span></div>${wp.length ? `<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${wp.map(p => `<span class="tag t-model">${esc(p.name)} ×${p.qty}</span>`).join('')}</div>` : ''}</div>${ls.map(card).join('')}</section>`;
+  }).join('') : '<div class="panel" style="padding:18px;text-align:center">해당 기간의 무상 건이 없습니다</div>';
 }
 $('frMon').addEventListener('change', e => { FR.mon = e.target.value; renderFree(); });
 $('frWk').addEventListener('change', e => { FR.wk = e.target.value; renderFree(); });
