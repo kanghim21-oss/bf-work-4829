@@ -1962,7 +1962,7 @@ function applyRole() {
   hide('#menu [data-m="report"]', !adm);
   hide('#menu [data-m="audit"]', !adm);
   hide('#menu [data-m="settings"]', Auth.name !== CFG_ADMIN);
-  $('monthBtn').classList.toggle('hidden', !adm);
+  $('monthBtn').classList.remove('hidden');
   $('newPart').closest('.addrow').classList.toggle('hidden', !adm);
   $('logoutBtn').textContent = '🚪 로그아웃 (' + Auth.name + ')';
   $('pill').onclick = Auth.name === CFG_ADMIN ? openSettings : () => toast(Sync.state === 'online' ? '서버와 연결되어 있습니다' : '연결 상태를 확인하는 중입니다');
