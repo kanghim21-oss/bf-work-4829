@@ -468,7 +468,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
 
       <div class="g2">
         <div class="f"><label for="fParts">부속원가</label><input id="fParts" class="money" inputmode="numeric" placeholder="0"></div>
-        <div class="f"><label for="fFee">기사수당 *</label><input id="fFee" class="money fee-in" inputmode="numeric" placeholder="0"></div>
+        <div class="f"><label for="fFee">기사수당 *</label><input id="fFee" class="money fee-in" inputmode="numeric" placeholder="0"><span id="feeHint" class="help hidden">자동 계산됨 · 직접 고치면 그 금액으로 저장</span></div>
       </div>
       <p class="help hidden" id="legacyInst"></p>
     </div>
@@ -895,6 +895,18 @@ function deleteLog(id) {
 const moneyIds = ['fCash', 'fAcct', 'fCard', 'fDue', 'fParts', 'fFee'];
 const getM = id => n(digits($(id).value));
 const setM = (id, v) => { $(id).value = n(v) ? fmt(v) : ''; };
+/* 기사 수당 자동 계산 (이상민·신동하·박병학): (현금 + (계좌+카드)×0.9 − 부속) ÷ 2 */
+const AUTO_FEE = ['이상민', '신동하', '박병학'];
+let feeManual = false;
+const calcFee = (c, a, k, p) => Math.max(0, Math.round((c + (a + k) * 0.9 - p) / 2));
+function autoFee() {
+  const on = AUTO_FEE.includes($('fWorker').value) && !$('fFree').checked;
+  $('feeHint').classList.toggle('hidden', !on || feeManual);
+  if (!on || feeManual) return;
+  const paid = getM('fCash') + getM('fAcct') + getM('fCard');
+  const f = paid > 0 ? calcFee(getM('fCash'), getM('fAcct'), getM('fCard'), getM('fParts')) : 0;
+  $('fFee').value = f ? fmt(f) : '';
+}
 function updateLive() { $('livePaid').textContent = won(getM('fCash') + getM('fAcct') + getM('fCard')); }
 
 function openForm(l, presetWorker) {
@@ -912,7 +924,9 @@ function openForm(l, presetWorker) {
   setM('fParts', v.partsPrice); setM('fFee', v.allowance);
   $('legacyInst').textContent = n(v.installFee) ? `이 건에는 기존 설치수당 ${fmt(v.installFee)}원이 수당 합계에 포함되어 있습니다.` : '';
   $('legacyInst').classList.toggle('hidden', !n(v.installFee));
-  updateLive();
+  feeManual = false;
+  if (l && AUTO_FEE.includes(l.worker) && !l.isFree) { const f = calcFee(n(l.cash), n(l.account), n(l.card), n(l.partsPrice)); feeManual = !(n(l.allowance) === f && !n(l.installFee)); if (n(l.installFee) || (n(l.cash) + n(l.account) + n(l.card)) === 0) feeManual = true; }
+  updateLive(); autoFee();
   initUsed(!l);
   $('dlgForm').showModal();
 }
@@ -1284,8 +1298,10 @@ document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click
 document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
 moneyIds.concat(['dueAmtIn']).forEach(id => $(id).addEventListener('input', e => {
   const v = digits(e.target.value); e.target.value = v ? Number(v).toLocaleString('ko-KR') : ''; updateLive();
+  if (e.target.id === 'fFee') { feeManual = true; $('feeHint').classList.add('hidden'); } else if (['fCash', 'fAcct', 'fCard', 'fParts'].includes(e.target.id)) autoFee();
 }));
-$('fFree').addEventListener('change', e => { if (e.target.checked) { moneyIds.forEach(id => $(id).value = ''); updateLive(); } });
+$('fWorker').addEventListener('change', () => { feeManual = false; autoFee(); });
+$('fFree').addEventListener('change', e => { if (e.target.checked) { moneyIds.forEach(id => $(id).value = ''); updateLive(); } feeManual = false; autoFee(); });
 $('reasonChips').innerHTML = REASONS.map(r => `<button type="button">${r}</button>`).join('');
 $('reasonChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const f = $('fReason'); f.value = f.value ? f.value + ', ' + b.textContent : b.textContent; f.focus(); });
 $('dueCash').onclick = () => collectDue('cash'); $('dueAcct').onclick = () => collectDue('account');
