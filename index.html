@@ -1435,7 +1435,7 @@ $('menu').addEventListener('click', async e => {
 const MON = { ym: today().slice(0, 7), open: null };
 function monthRows(ym) {
   const list = logs.filter(l => (l.date || '').slice(0, 7) === ym);
-  return WORKERS.map(w => {
+  return WORKERS.filter(w => isAdmin() || w.name === Auth.name).map(w => {
     const mine = list.filter(l => l.worker === w.name);
     const days = {};
     mine.forEach(l => { const d = days[l.date] || (days[l.date] = { cnt: 0, fee: 0 }); d.cnt++; d.fee += fee(l); });
@@ -1450,11 +1450,11 @@ function renderMonth() {
   $('mBody').innerHTML = `<table class="mt"><thead><tr><th>기사</th><th>건수</th><th>수당</th><th>설치수당</th><th>합계</th></tr></thead><tbody>
   ${rows.map(({ w, s, allow, inst, days }) => `<tr class="w" data-w="${esc(w.name)}"><td>${esc(w.name)} <small style="color:var(--muted)">${MON.open === w.name ? '▲' : '▼'}</small></td><td class="num">${s.cnt}</td><td class="num">${fmt(allow)}</td><td class="num">${inst ? fmt(inst) : '-'}</td><td class="num fee">${fmt(s.fee)}</td></tr>`
     + (MON.open === w.name ? Object.keys(days).sort().map(d => `<tr class="dd"><td>${+d.slice(5, 7)}/${+d.slice(8)}</td><td class="num">${days[d].cnt}건</td><td></td><td></td><td class="num">${fmt(days[d].fee)}</td></tr>`).join('') || '<tr class="dd"><td colspan="5">이 달 일지가 없습니다</td></tr>' : '')).join('')}
-  </tbody><tfoot><tr><td>전체</td><td class="num">${T.cnt}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.allow, 0))}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.inst, 0))}</td><td class="num">${fmt(T.fee)}</td></tr></tfoot></table>`;
-  MON.text = [`📅 ${monthLabel(ym)} 기사 수당 (1일~${last}일)`, '─────────────', ...rows.map(r => `${r.w.name}: ${fmt(r.s.fee)}원 (${r.s.cnt}건)`), '─────────────', `합계: ${fmt(T.fee)}원`].join('\n');
+  </tbody><tfoot><tr><td>${isAdmin() ? '전체' : '이달 합계'}</td><td class="num">${T.cnt}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.allow, 0))}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.inst, 0))}</td><td class="num">${fmt(T.fee)}</td></tr></tfoot></table>`;
+  MON.text = [`📅 ${monthLabel(ym)} ${isAdmin() ? '기사 수당' : Auth.name + ' 수당'} (1일~${last}일)`, '─────────────', ...rows.map(r => `${r.w.name}: ${fmt(r.s.fee)}원 (${r.s.cnt}건)`), '─────────────', `합계: ${fmt(T.fee)}원`].join('\n');
 }
-function openMonth(ym) { if (ym) MON.ym = ym; MON.open = null; renderMonth(); if (!$('dlgMonth').open) $('dlgMonth').showModal(); }
-function shiftMonth(k) { const d = new Date(+MON.ym.slice(0, 4), +MON.ym.slice(5) - 1 + k, 1); MON.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; MON.open = null; renderMonth(); }
+function openMonth(ym) { if (ym) MON.ym = ym; MON.open = isAdmin() ? null : Auth.name; renderMonth(); if (!$('dlgMonth').open) $('dlgMonth').showModal(); }
+function shiftMonth(k) { const d = new Date(+MON.ym.slice(0, 4), +MON.ym.slice(5) - 1 + k, 1); MON.ym = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; MON.open = isAdmin() ? null : Auth.name; renderMonth(); }
 $('monthBtn').onclick = () => openMonth((S.from || today()).slice(0, 7));
 $('mPrev').onclick = () => shiftMonth(-1);
 $('mNext').onclick = () => shiftMonth(1);
@@ -1958,7 +1958,7 @@ $('lgPw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }
 function applyRole() {
   const adm = isAdmin();
   const hide = (sel, on) => document.querySelectorAll(sel).forEach(el => el.classList.toggle('hidden', on));
-  hide('#menu [data-m="month"]', !adm);
+  hide('#menu [data-m="month"]', false);
   hide('#menu [data-m="report"]', !adm);
   hide('#menu [data-m="audit"]', !adm);
   hide('#menu [data-m="settings"]', Auth.name !== CFG_ADMIN);
