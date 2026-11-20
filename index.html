@@ -345,7 +345,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       <button id="pill" class="pill connecting" title="연동 상태 보기"><span class="dot"></span><span id="pillText">연결 중…</span></button>
       <button id="menuBtn" class="icon-btn" aria-label="메뉴">⋯</button>
     </div>
-    <div class="modes"><button data-mode="logs">📒 작업일지</button><button data-mode="parts">🔧 부품재고</button></div>
+    <div class="modes"><button data-mode="logs">📒 작업일지</button><button data-mode="parts">🔧 부품재고</button><button data-mode="boilers">🔥 보일러재고</button></div>
     <nav class="tabs" id="tabs" aria-label="기사 선택"></nav>
   </div>
   <div class="menu" id="menu">
@@ -403,6 +403,11 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
   </div>
   </div>
 
+  <div id="boilerPane" class="hidden" style="display:grid;gap:12px;grid-template-columns:minmax(0,1fr)">
+    <section class="sum" id="bSum"></section>
+    <section class="panel filters" id="bAddBox"><div class="addrow"><input id="bModel" list="bModelList" placeholder="모델명 (예: 트윈알파에코 L11)"><input id="bCap" inputmode="numeric" placeholder="용량 (예: 16)" style="max-width:110px"><button class="btn brand" id="bAdd">+ 추가</button></div><datalist id="bModelList"></datalist></section>
+    <div id="bList" style="display:grid;gap:14px"></div>
+  </div>
   <div id="partsPane" class="hidden" style="display:grid;gap:12px;grid-template-columns:minmax(0,1fr)">
     <section class="sum" id="pSum"></section>
     <div class="pview" id="pView"><button data-pv="stock">📦 재고</button><button data-pv="who">👤 기사별 반출</button></div>
@@ -723,9 +728,11 @@ function render() {
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === S.mode));
   $('logsPane').classList.toggle('hidden', S.mode !== 'logs');
   $('partsPane').classList.toggle('hidden', S.mode !== 'parts');
+  $('boilerPane').classList.toggle('hidden', S.mode !== 'boilers');
   $('tabs').classList.toggle('hidden', S.mode !== 'logs');
   $('fab').classList.toggle('hidden', S.mode !== 'logs');
   if (S.mode === 'parts') { renderParts(); renderPill(); return; }
+  if (S.mode === 'boilers') { renderBoilers(); renderPill(); return; }
   const list = base(false), all = base(true), s = sums(list);
   renderTabs(all);
   renderFilters();
@@ -1416,22 +1423,23 @@ function renderWho() {
     + (hist.length ? hist.map(m => { const k = KIND[m.kind] || KIND.take; return `<div class="panel mrow" data-mid="${esc(m.id)}"><span class="tag ${k[1]}">${k[0]}</span><span class="mt1">${esc(m.partName)} ×${n(m.qty)}<small>${esc(m.worker)} · ${esc(m.date)}${pendM[m.id] ? ' ⏳' : ''}</small></span><button class="x" data-undo aria-label="취소">✕</button></div>`; }).join('') : '<div class="panel empty"><p><b>아직 반출 내역이 없습니다</b></p><p class="help">재고 화면에서 부품의 "👤 반출/반납"을 눌러 기록하세요</p></div>');
 }
 function renderParts() {
+  const PA = parts.filter(p => !isB(p));
   const who = S.pv === 'who';
   document.querySelectorAll('#pView button').forEach(b => b.classList.toggle('on', b.dataset.pv === S.pv));
   ['pFilters', 'pList'].forEach(id => $(id).classList.toggle('hidden', who));
   $('pWho').classList.toggle('hidden', !who);
   if (who) { renderWho(); }
   const HOLD = holdings();
-  const pages = [...new Set(parts.map(p => p.page).filter(Boolean))].sort((a, b) => pageRank(a) - pageRank(b));
+  const pages = [...new Set(PA.map(p => p.page).filter(Boolean))].sort((a, b) => pageRank(a) - pageRank(b));
   if (S.pg !== 'ALL' && !pages.includes(S.pg)) S.pg = 'ALL';
   const q = S.pq.trim().toLowerCase();
-  const list = sortParts(parts.filter(p => (S.pg === 'ALL' || p.page === S.pg) && (!q || p.name.toLowerCase().includes(q))));
-  const total = parts.reduce((a, p) => a + n(p.count), 0), shown = list.reduce((a, p) => a + n(p.count), 0);
-  const zero = parts.filter(p => !n(p.count)).length;
+  const list = sortParts(PA.filter(p => (S.pg === 'ALL' || p.page === S.pg) && (!q || p.name.toLowerCase().includes(q))));
+  const total = PA.reduce((a, p) => a + n(p.count), 0), shown = list.reduce((a, p) => a + n(p.count), 0);
+  const zero = PA.filter(p => !n(p.count)).length;
   $('pSum').innerHTML = `
     <div class="panel tile"><span class="l">보기 품목</span><span class="v num">${list.length}<small>종</small></span></div>
     <div class="panel tile"><span class="l">보기 수량</span><span class="v num">${fmt(shown)}<small>개</small></span></div>
-    <div class="panel tile hero"><span class="l">전체 재고</span><span class="v num">${fmt(total)}<small>개</small></span><span class="s">${parts.length}종</span></div>
+    <div class="panel tile hero"><span class="l">전체 재고</span><span class="v num">${fmt(total)}<small>개</small></span><span class="s">${PA.length}종</span></div>
     <div class="panel tile" ${zero ? 'style="border-color:var(--due)"' : ''}><span class="l">품절 품목</span><span class="v num" style="color:${zero ? 'var(--due)' : 'inherit'}">${zero}<small>종</small></span></div>`;
   S.pg = 'ALL';
   $('pChips').innerHTML = ['ALL'].concat(pages).map(pg => `<button class="chip ${S.pg === pg ? 'on' : ''}" data-pg="${esc(pg)}">${pg === 'ALL' ? '전체' : esc(pg)}</button>`).join('');
@@ -1443,8 +1451,8 @@ function renderParts() {
       <div class="pextra"><span class="holds">${(() => { const o = HOLD[p.id] || {}, a = Object.keys(o).filter(w => o[w] > 0); return a.length ? '👤 ' + a.map(w => `${esc(w)} <b>${o[w]}</b>`).join(' · ') : ''; })()}</span><button class="mvbtn" data-pa="mv">👤 반출/반납</button></div>
     </div>`).join('');
   const em = $('pEmpty'); em.classList.toggle('hidden', list.length > 0 || who);
-  if (!list.length) em.innerHTML = parts.length ? '<p><b>조건에 맞는 부품이 없습니다</b></p>' : `<div class="big">🔧</div><p><b>등록된 부품이 없습니다</b></p>${PARTS_SEED.length ? `<div class="btns"><button class="btn sm brand" data-pseed>기존 부품 재고 ${PARTS_SEED.length}종 불러오기</button></div>` : ''}`;
-  $('partList').innerHTML = parts.map(p => `<option value="${esc(p.name)}">`).join('');
+  if (!list.length) em.innerHTML = PA.length ? '<p><b>조건에 맞는 부품이 없습니다</b></p>' : `<div class="big">🔧</div><p><b>등록된 부품이 없습니다</b></p>${PARTS_SEED.length ? `<div class="btns"><button class="btn sm brand" data-pseed>기존 부품 재고 ${PARTS_SEED.length}종 불러오기</button></div>` : ''}`;
+  $('partList').innerHTML = PA.map(p => `<option value="${esc(p.name)}">`).join('');
 }
 
 function reconcileP(cloud) {
@@ -1620,15 +1628,54 @@ function initUsed(show) {
 document.querySelector('.modes').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) { S.mode = b.dataset.mode; wr(LS.mode, S.mode); render(); scrollTo(0, 0); } });
 $('pChips').addEventListener('click', e => { const b = e.target.closest('[data-pg]'); if (b) { S.pg = b.dataset.pg; render(); } });
 $('pq').addEventListener('input', e => { S.pq = e.target.value; render(); });
-$('pList').addEventListener('click', e => {
+const pListClick = e => {
   const b = e.target.closest('[data-pa]'); if (!b) return;
   const id = b.closest('[data-id]').dataset.id, p = findP(id); if (!p) return;
   if (b.dataset.pa === 'mv') return openMove(id);
   if (!isAdmin() && b.dataset.pa !== '-') return toast('입고·삭제는 박은조·최태영만 가능합니다');
   if (b.dataset.pa === 'x') { if (!confirm(`[${p.name}]\n이 부품을 목록에서 삭제할까요?`)) return; parts = parts.filter(x => x.id !== id); commitP(id, 'del'); }
   else { p.count = Math.max(0, n(p.count) + (b.dataset.pa === '+' ? 1 : -1)); commitP(id, 'up'); }
-});
+};
+$('pList').addEventListener('click', pListClick);
+$('bList').addEventListener('click', pListClick);
 $('pEmpty').addEventListener('click', e => { if (e.target.closest('[data-pseed]')) importParts(); });
+/* 보일러 재고 (parts 테이블의 page='보일러' 항목) */
+const isB = p => p.page === '보일러';
+const bSplit = name => { const m = /^(.*?)\s*(\d+)K?$/.exec(name); return m ? { model: m[1], cap: +m[2] } : { model: name, cap: 0 }; };
+function renderBoilers() {
+  const adm = isAdmin();
+  $('bAddBox').classList.toggle('hidden', !adm);
+  const B = parts.filter(isB);
+  const groups = [];
+  B.slice().sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })).forEach(p => {
+    const s = bSplit(p.name); let g = groups.find(x => x.model === s.model);
+    if (!g) groups.push(g = { model: s.model, items: [] });
+    g.items.push({ p, cap: s.cap });
+  });
+  groups.forEach(g => g.items.sort((a, b) => a.cap - b.cap));
+  const total = B.reduce((a, p) => a + n(p.count), 0), zero = B.filter(p => !n(p.count)).length;
+  $('bSum').innerHTML = `
+    <div class="panel tile hero"><span class="l">보일러 전체 재고</span><span class="v num">${fmt(total)}<small>대</small></span><span class="s">${groups.length}개 모델 · ${B.length}종</span></div>
+    <div class="panel tile" ${zero ? 'style="border-color:var(--due)"' : ''}><span class="l">품절 품목</span><span class="v num" style="color:${zero ? 'var(--due)' : 'inherit'}">${zero}<small>종</small></span></div>`;
+  $('bModelList').innerHTML = groups.map(g => `<option value="${esc(g.model)}">`).join('');
+  $('bList').innerHTML = groups.length ? groups.map(g => {
+    const sub = g.items.reduce((a, x) => a + n(x.p.count), 0);
+    return `<section><h3 style="margin:0 2px 8px;font-size:15px">${esc(g.model)} <span class="help" style="font-weight:700">· ${fmt(sub)}대</span></h3><div class="plist">` + g.items.map(({ p, cap }) => `
+    <div class="panel prow" data-id="${esc(p.id)}">
+      <div class="pinfo"><span class="pname">${cap}K${pendP[p.id] ? ' ⏳' : ''}</span></div>
+      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button><b class="pc num ${n(p.count) ? '' : 'zero'}">${n(p.count)}</b>${adm ? '<button class="plus" data-pa="+" aria-label="입고 하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button>' : ''}</div>
+    </div>`).join('') + '</div></section>';
+  }).join('') : '<div class="panel empty"><p><b>등록된 보일러가 없습니다</b></p></div>';
+}
+$('bAdd').onclick = () => {
+  if (!isAdmin()) return toast('추가는 박은조·최태영만 가능합니다');
+  const model = $('bModel').value.trim(), cap = digits($('bCap').value);
+  if (!model || !cap) return toast('모델명과 용량을 입력하세요');
+  const name = `${model} ${+cap}K`;
+  if (parts.some(p => isB(p) && p.name === name)) return toast('이미 있는 항목입니다');
+  const p = { id: 'b-' + Date.now(), page: '보일러', name, count: 0 };
+  parts.push(p); $('bCap').value = ''; commitP(p.id, 'up'); toast(`${name} 추가`);
+};
 function addPart() {
   if (!isAdmin()) return toast('새 부품 입고는 박은조·최태영만 가능합니다');
   const name = $('newPart').value.trim(); if (!name) return toast('부품 이름을 입력하세요');
@@ -1639,7 +1686,7 @@ $('addPart').onclick = addPart;
 $('newPart').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addPart(); } });
 $('pAdd').onclick = () => {
   const name = $('pName').value.trim().toLowerCase(); if (!name) return;
-  const p = parts.find(x => x.name.toLowerCase() === name) || (parts.filter(x => x.name.toLowerCase().includes(name)).length === 1 ? parts.find(x => x.name.toLowerCase().includes(name)) : null);
+  const PA = parts.filter(x => !isB(x)); const p = PA.find(x => x.name.toLowerCase() === name) || (PA.filter(x => x.name.toLowerCase().includes(name)).length === 1 ? PA.find(x => x.name.toLowerCase().includes(name)) : null);
   if (!p) return toast('재고 목록에 없는 부품입니다 (목록에서 골라주세요)');
   const qty = Math.max(1, getM('pQty') || 1);
   const ex = usedParts.find(u => u.id === p.id); if (ex) ex.qty += qty; else usedParts.push({ id: p.id, name: p.name, qty });
