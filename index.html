@@ -802,7 +802,7 @@ function renderSummary(s) {
   $('sum').innerHTML = `
     <div class="panel tile hero"><span class="l">수납 합계</span><span class="v num">${fmt(s.paid)}<small>원</small></span><span class="s">작업 ${s.cnt}건 · 무상 ${s.free}건</span></div>
     <div class="panel tile"><span class="l">부속 원가</span><span class="v num" style="color:var(--parts)">${fmt(s.parts)}<small>원</small></span><span class="s">&nbsp;</span></div>
-    <div class="panel tile fee"><span class="l">기사 수당 합계</span><span class="v num">${fmt(s.fee)}<small>원</small></span><span class="s">${isAdmin() ? `${+ym.slice(5)}월 누적 ${fmt(mFee)}원` : '&nbsp;'}</span></div>`;
+    <div class="panel tile fee"><span class="l">기사 수당 합계</span><span class="v num">${fmt(s.fee)}<small>원</small></span><span class="s">${+ym.slice(5)}월 누적 ${fmt(mFee)}원</span></div>`;
   $('paybar').innerHTML = `
     <span class="tag t-cash">💵 현금 <span class="num">${fmt(s.cash)}</span></span>
     <span class="tag t-acct">🏦 계좌 <span class="num">${fmt(s.account)}</span></span>
