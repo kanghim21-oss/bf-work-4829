@@ -414,6 +414,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       <input type="month" id="frMon" style="height:36px;border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);color:inherit">
       <select id="frWk" style="height:36px;border:1px solid var(--line);border-radius:10px;padding:0 8px;background:var(--surface);color:inherit"></select>
       <button class="btn sm" id="frAll" type="button">전체 기간</button>
+      <button class="btn sm" id="frPrint" type="button">🖨 인쇄</button>
       <button class="btn sm" id="frCsv" type="button">CSV 저장</button>
     </section>
     <section class="sum" id="frSum"></section>
@@ -1368,7 +1369,24 @@ $('reasonChips').addEventListener('click', e => { const b = e.target.closest('bu
 $('dueCash').onclick = () => collectDue('cash'); $('dueAcct').onclick = () => collectDue('account');
 
 /* 인쇄 (표 형태, A4 가로) */
+function buildPrintFree() {
+  const rows = freeRows().slice().reverse(); if (!rows.length) return false;
+  const fp = freeParts(rows), qty = fp.reduce((a, p) => a + p.qty, 0), amt = fp.reduce((a, p) => a + p.qty * p.price, 0);
+  const when = FR.mon ? FR.mon.replace('-', '년 ') + '월' : '전체 기간', who = FR.wk === 'ALL' ? '전체 기사' : FR.wk;
+  const body = rows.map((l, i) => `<tr><td class="r">${i + 1}</td><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason].filter(Boolean).join(' / '))}</td><td>${esc(l.action)}</td><td>${esc((l.usedParts || []).map(u => `${u.name} ×${u.qty}`).join(', '))}</td><td class="r">${(l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0) ? fmt((l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0)) : ''}</td></tr>`).join('');
+  const pr = fp.map(p => `<tr><td>${esc(p.name)}</td><td class="r">${p.price ? fmt(p.price) : ''}</td><td class="r">${p.qty}</td><td class="r">${p.price ? fmt(p.qty * p.price) : ''}</td></tr>`).join('');
+  $('printArea').innerHTML = `<div class="phead"><div><h1>귀뚜라미 미추홀 대리점 무상 A/S 내역</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 무상 ${rows.length}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p></div>
+  <table class="psign"><tr><th>경리실장</th><th>대 표</th></tr><tr><td></td><td></td></tr></table></div>
+  <table><colgroup><col style="width:4%"><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:17%"><col style="width:16%"><col style="width:16%"><col style="width:8%"></colgroup>
+  <thead><tr><th>No</th><th>날짜</th><th>기사</th><th>주소</th><th>연락처</th><th>모델/접수</th><th>조치내역</th><th>사용부품</th><th>부품금액</th></tr></thead>
+  <tbody>${body}</tbody>
+  <tfoot><tr><td colspan="7">합계</td><td class="r">${qty}개</td><td class="r">${fmt(amt)}</td></tr></tfoot></table>
+  ${fp.length ? `<h1 style="font-size:13px;margin:12px 0 4px">무상 부품 합계</h1><table style="width:60%"><colgroup><col style="width:52%"><col style="width:16%"><col style="width:12%"><col style="width:20%"></colgroup><thead><tr><th>부품명</th><th>단가</th><th>수량</th><th>금액</th></tr></thead><tbody>${pr}</tbody></table>` : ''}`;
+  document.body.classList.add('doprint');
+  return true;
+}
 function buildPrint() {
+  if (S.mode === 'free') return buildPrintFree();
   if (S.mode !== 'logs') return false;
   const list = base(false).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || String(a.id).localeCompare(String(b.id)));
   if (!list.length) return false;
@@ -1735,6 +1753,7 @@ function renderFree() {
 }
 $('frMon').addEventListener('change', e => { FR.mon = e.target.value; renderFree(); });
 $('frWk').addEventListener('change', e => { FR.wk = e.target.value; renderFree(); });
+$('frPrint').onclick = () => { if (!freeRows().length) return toast('인쇄할 무상 건이 없습니다'); window.print(); };
 $('frAll').onclick = () => { FR.mon = ''; renderFree(); };
 $('frList').addEventListener('click', e => { const a = e.target.closest('[data-id]'); const l = a && find(a.dataset.id); if (l) openForm(l); });
 $('frCsv').onclick = () => {
