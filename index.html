@@ -1677,12 +1677,14 @@ function startMovesRealtime() {
 }
 
 /* 작업 등록 시 사용 부품 */
-let usedParts = [];
+let usedParts = [], partsBase = 0;
+const usedSum = () => usedParts.reduce((a, u) => a + n(u.price) * u.qty, 0);
+function syncPartsCost() { if (!usedParts.some(u => u.price) && !usedSum()) { setM('fParts', partsBase); } else setM('fParts', partsBase + usedSum()); updateLive(); autoFee(); }
 function renderUsed() {
   $('usedChips').innerHTML = usedParts.map((u, i) => `<button type="button" data-ui="${i}">${esc(u.name)} ×${u.qty} ✕</button>`).join('');
 }
 function initUsed(show) {
-  usedParts = []; renderUsed();
+  usedParts = []; partsBase = getM('fParts'); renderUsed();
   $('partList').innerHTML = parts.map(p => `<option value="${esc(p.name)}">`).join('');
   $('partsPick').classList.toggle('hidden', !show || !parts.length);
   $('pName').value = ''; $('pQty').value = '1';
@@ -1764,12 +1766,13 @@ $('pAdd').onclick = () => {
   const PA = parts.filter(x => !isB(x)); const p = PA.find(x => x.name.toLowerCase() === name) || (PA.filter(x => x.name.toLowerCase().includes(name)).length === 1 ? PA.find(x => x.name.toLowerCase().includes(name)) : null);
   if (!p) return toast('재고 목록에 없는 부품입니다 (목록에서 골라주세요)');
   const qty = Math.max(1, getM('pQty') || 1);
-  const ex = usedParts.find(u => u.id === p.id); if (ex) ex.qty += qty; else usedParts.push({ id: p.id, name: p.name, qty });
+  const ex = usedParts.find(u => u.id === p.id); if (ex) ex.qty += qty; else usedParts.push({ id: p.id, name: p.name, qty, price: n(p.price) });
   const f = $('fAction'); f.value = (f.value ? f.value + ', ' : '') + p.name + (qty > 1 ? ` ×${qty}` : '');
-  $('pName').value = ''; $('pQty').value = '1'; renderUsed();
+  $('pName').value = ''; $('pQty').value = '1'; renderUsed(); syncPartsCost();
 };
 $('pQty').addEventListener('input', e => { e.target.value = digits(e.target.value); });
-$('usedChips').addEventListener('click', e => { const b = e.target.closest('[data-ui]'); if (b) { usedParts.splice(+b.dataset.ui, 1); renderUsed(); } });
+$('usedChips').addEventListener('click', e => { const b = e.target.closest('[data-ui]'); if (b) { usedParts.splice(+b.dataset.ui, 1); renderUsed(); syncPartsCost(); } });
+$('fParts').addEventListener('input', () => { partsBase = Math.max(0, getM('fParts') - usedSum()); });
 
 /* 홈 화면 앱 (PWA): 서비스 워커 등록 */
 try { if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
