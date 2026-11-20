@@ -281,7 +281,24 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
 .tallyc{color:var(--muted);font-family:monospace;font-size:13px;min-width:30px;text-align:right}
 .addrow{display:flex;gap:8px}.addrow input{flex:1;min-width:0;height:44px;border:1px solid var(--line);background:var(--surface2);border-radius:12px;padding:0 12px;outline:none}
 .usedrow{display:flex;gap:8px;align-items:center}.usedrow input{min-width:0}
-@media print{header.top,.fab,.bar,.filters,.acts{display:none!important}body{background:#fff}}
+#printArea{display:none}
+@page{size:A4 landscape;margin:10mm}
+@media print{
+  body{background:#fff!important;color:#000!important;padding:0!important;font-size:11px}
+  body.doprint>*:not(#printArea){display:none!important}
+  body.doprint #printArea{display:block!important}
+  #printArea h1{font-size:16px;margin:0 0 2px}
+  #printArea .pmeta{font-size:11px;margin:0 0 8px;color:#333}
+  #printArea table{width:100%;border-collapse:collapse;table-layout:fixed}
+  #printArea th,#printArea td{border:1px solid #888;padding:3px 4px;font-size:10.5px;line-height:1.3;vertical-align:top;word-break:break-all;overflow-wrap:anywhere}
+  #printArea th{background:#eee;text-align:center}
+  #printArea td.r{text-align:right;white-space:nowrap}
+  #printArea thead{display:table-header-group}
+  #printArea tfoot{display:table-row-group}
+  #printArea tr{break-inside:avoid;page-break-inside:avoid}
+  #printArea tr.free td{color:#b00}
+  #printArea tfoot td{font-weight:700;background:#f4f4f4}
+}
 
 #login{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;overflow:auto;padding:max(20px,env(safe-area-inset-top)) 16px 24px}
 #login.on{display:block}
@@ -337,6 +354,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
     <hr>
     <button data-m="report">💬 카톡 보고서 만들기</button>
     <button data-m="png">📸 이미지(PNG)로 저장</button>
+    <button data-m="print">🖨 인쇄 (현재 조회분)</button>
     <hr>
     <button data-m="csvView">📊 엑셀 저장 (현재 조회분)</button>
     <button data-m="csvAll">📊 엑셀 저장 (전체)</button>
@@ -525,6 +543,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastAct" class="hidden"></button></div>
 <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
 
+<div id="printArea"></div>
 <script>
 /* ============================================================
    설정 (기사 명단 / 연결 정보)
@@ -1263,6 +1282,26 @@ $('reasonChips').innerHTML = REASONS.map(r => `<button type="button">${r}</butto
 $('reasonChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const f = $('fReason'); f.value = f.value ? f.value + ', ' + b.textContent : b.textContent; f.focus(); });
 $('dueCash').onclick = () => collectDue('cash'); $('dueAcct').onclick = () => collectDue('account');
 
+/* 인쇄 (표 형태, A4 가로) */
+function buildPrint() {
+  if (S.mode !== 'logs') return false;
+  const list = base(false).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || String(a.id).localeCompare(String(b.id)));
+  if (!list.length) return false;
+  const s = sums(list), when = S.from ? (S.from === S.to ? S.from : `${S.from} ~ ${S.to || ''}`) : '전체 기간';
+  const who = S.worker === 'ALL' ? '전체 기사' : S.worker;
+  const rows = list.map(l => `<tr class="${l.isFree ? 'free' : ''}"><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}${l.isFree ? ' (무상)' : ''}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason, l.action].filter(Boolean).join(' / '))}${l.depositor ? ' [' + esc(l.depositor) + ']' : ''}</td><td class="r">${n(l.cash) ? fmt(l.cash) : ''}</td><td class="r">${n(l.account) ? fmt(l.account) : ''}</td><td class="r">${n(l.card) ? fmt(l.card) : ''}</td><td class="r">${n(l.unpaid) ? fmt(l.unpaid) : ''}</td><td class="r">${n(l.partsPrice) ? fmt(l.partsPrice) : ''}</td><td class="r">${fee(l) ? fmt(fee(l)) : ''}</td></tr>`).join('');
+  $('printArea').innerHTML = `<h1>보일러팜 작업일지</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 작업 ${s.cnt}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p>
+  <table><colgroup><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:21%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:7%"></colgroup>
+  <thead><tr><th>날짜</th><th>기사</th><th>주소</th><th>연락처</th><th>내용</th><th>현금</th><th>계좌</th><th>카드</th><th>미수</th><th>부속</th><th>수당</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="5">합계 (수납 ${fmt(s.paid)}원)</td><td class="r">${fmt(s.cash)}</td><td class="r">${fmt(s.account)}</td><td class="r">${fmt(s.card)}</td><td class="r">${fmt(s.unpaid)}</td><td class="r">${fmt(s.parts)}</td><td class="r">${fmt(s.fee)}</td></tr></tfoot></table>`;
+  document.body.classList.add('doprint');
+  return true;
+}
+function doPrint() { if (S.mode !== 'logs') return toast('작업일지 화면에서 인쇄하세요'); if (!base(false).length) return toast('인쇄할 일지가 없습니다'); window.print(); }
+window.addEventListener('beforeprint', buildPrint);
+window.addEventListener('afterprint', () => { document.body.classList.remove('doprint'); $('printArea').innerHTML = ''; });
+
 /* 메뉴 */
 $('menuBtn').onclick = e => { e.stopPropagation(); $('menu').classList.toggle('open'); };
 document.addEventListener('click', e => { if (!e.target.closest('#menu')) $('menu').classList.remove('open'); });
@@ -1271,6 +1310,7 @@ $('menu').addEventListener('click', async e => {
   const m = b.dataset.m;
   if (m === 'report') { const t = buildReport(); if (t) { $('reportText').textContent = t; $('rShare').classList.toggle('hidden', !navigator.share); $('dlgReport').showModal(); } }
   else if (m === 'png') savePNG();
+  else if (m === 'print') doPrint();
   else if (m === 'csvView') csv(base(false), `보일러팜_일지_${S.from || '전체'}.csv`);
   else if (m === 'csvAll') csv(logs.slice().sort((a, b) => b.date.localeCompare(a.date)), `보일러팜_일지_전체_${today()}.csv`);
   else if (m === 'backup') { download(`보일러팜_백업_${today()}.json`, JSON.stringify(logs, null, 1), 'application/json'); toast('백업 파일을 저장했습니다'); }
