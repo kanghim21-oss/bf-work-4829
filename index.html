@@ -966,9 +966,9 @@ function openForm(l, presetWorker) {
   $('legacyInst').textContent = n(v.installFee) ? `이 건에는 기존 설치수당 ${fmt(v.installFee)}원이 수당 합계에 포함되어 있습니다.` : '';
   $('legacyInst').classList.toggle('hidden', !n(v.installFee));
   feeManual = false; $('fInst').checked = false; $('fExtra').value = ''; $('fMat').value = ''; matQty = {}; renderMats();
-  if (l && AUTO_FEE.includes(l.worker) && !l.isFree) { const f = calcFee(n(l.cash), n(l.account), n(l.card), n(l.partsPrice)); feeManual = !(n(l.allowance) === f && !n(l.installFee)); if (n(l.installFee) || (n(l.cash) + n(l.account) + n(l.card)) === 0) feeManual = true; }
+  if (l && AUTO_FEE.includes(l.worker) && !l.isFree) { const f = calcFee(n(l.cash), n(l.account), n(l.card), n(l.partsPrice)); feeManual = !(n(l.allowance) === f && !n(l.installFee)) && n(l.allowance) !== 0; if (n(l.installFee) || (n(l.cash) + n(l.account) + n(l.card)) === 0) feeManual = true; }
   updateLive(); autoFee();
-  initUsed(!l);
+  initUsed(true);
   $('dlgForm').showModal();
 }
 function saveForm(e) {
@@ -984,7 +984,7 @@ function saveForm(e) {
   });
   const isNew = !$('fId').value;
   let usedMsg = '';
-  if (isNew && usedParts.length) {
+  if (usedParts.length) {
     let k = 0;
     usedParts.forEach(u => { const p = findP(u.id); if (p) { p.count = Math.max(0, n(p.count) - u.qty); pendP[p.id] = 'up'; k += u.qty; addMove(p, rec.worker, 'use', u.qty); } });
     savePartsLS(); savePendP(); usedMsg = ` · 재고 ${k}개 차감`;
