@@ -275,6 +275,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
 .pname{font-weight:700;word-break:keep-all;line-height:1.3}
 .pctl{display:flex;align-items:center;gap:6px;flex:none}
 .pctl button{width:42px;height:42px;border-radius:11px;font-weight:800;font-size:20px;background:var(--surface2);border:1px solid var(--line)}
+.pcin{width:64px;height:42px;text-align:center;font-weight:800;font-size:18px;border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--ink)}.pcin.zero{color:var(--due)}
 .pctl .plus{background:var(--blue);color:#fff;border-color:var(--blue)}
 .pctl .del{width:30px;height:30px;font-size:13px;color:var(--muted);border:0;background:none}
 .pc{min-width:34px;text-align:center;font-size:19px;font-weight:800}.pc.zero{color:var(--due)}
@@ -1423,6 +1424,7 @@ function renderWho() {
     + (hist.length ? hist.map(m => { const k = KIND[m.kind] || KIND.take; return `<div class="panel mrow" data-mid="${esc(m.id)}"><span class="tag ${k[1]}">${k[0]}</span><span class="mt1">${esc(m.partName)} ×${n(m.qty)}<small>${esc(m.worker)} · ${esc(m.date)}${pendM[m.id] ? ' ⏳' : ''}</small></span><button class="x" data-undo aria-label="취소">✕</button></div>`; }).join('') : '<div class="panel empty"><p><b>아직 반출 내역이 없습니다</b></p><p class="help">재고 화면에서 부품의 "👤 반출/반납"을 눌러 기록하세요</p></div>');
 }
 function renderParts() {
+  if (document.activeElement && document.activeElement.classList.contains('pcin')) return;
   const PA = parts.filter(p => !isB(p));
   const who = S.pv === 'who';
   document.querySelectorAll('#pView button').forEach(b => b.classList.toggle('on', b.dataset.pv === S.pv));
@@ -1447,7 +1449,7 @@ function renderParts() {
   $('pList').innerHTML = list.map(p => `
     <div class="panel prow" data-id="${esc(p.id)}">
       <div class="pinfo"><span class="pname">${esc(p.name)}${pendP[p.id] ? ' ⏳' : ''}</span></div>
-      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button><b class="pc num ${n(p.count) ? '' : 'zero'}">${n(p.count)}</b>${isAdmin() ? '<button class="plus" data-pa="+" aria-label="입고 하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button>' : ''}</div>
+      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button>${cntCell(p)}${isAdmin() ? '<button class="plus" data-pa="+" aria-label="입고 하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button>' : ''}</div>
       <div class="pextra"><span class="holds">${(() => { const o = HOLD[p.id] || {}, a = Object.keys(o).filter(w => o[w] > 0); return a.length ? '👤 ' + a.map(w => `${esc(w)} <b>${o[w]}</b>`).join(' · ') : ''; })()}</span><button class="mvbtn" data-pa="mv">👤 반출/반납</button></div>
     </div>`).join('');
   const em = $('pEmpty'); em.classList.toggle('hidden', list.length > 0 || who);
@@ -1641,8 +1643,19 @@ $('bList').addEventListener('click', pListClick);
 $('pEmpty').addEventListener('click', e => { if (e.target.closest('[data-pseed]')) importParts(); });
 /* 보일러 재고 (parts 테이블의 page='보일러' 항목) */
 const isB = p => p.page === '보일러';
+const cntCell = p => isAdmin() ? `<input class="pcin num ${n(p.count) ? '' : 'zero'}" inputmode="numeric" value="${n(p.count)}" data-pset aria-label="수량 직접 입력">` : `<b class="pc num ${n(p.count) ? '' : 'zero'}">${n(p.count)}</b>`;
+const pSetChange = e => {
+  const i = e.target.closest('[data-pset]'); if (!i || !isAdmin()) return;
+  const row = i.closest('[data-id]'), p = row && findP(row.dataset.id); if (!p) return;
+  const v = Math.max(0, parseInt(digits(i.value) || '0', 10));
+  if (v !== n(p.count)) { p.count = v; commitP(p.id, 'up'); } else render();
+};
+const pSetKey = e => { if (e.target.closest('[data-pset]')) { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } } };
+const pSetFocus = e => { if (e.target.closest('[data-pset]')) e.target.select(); };
+['pList', 'bList'].forEach(id => { const el = $(id); el.addEventListener('change', pSetChange); el.addEventListener('keydown', pSetKey); el.addEventListener('focusin', pSetFocus); });
 const bSplit = name => { const m = /^(.*?)\s*(\d+)K?$/.exec(name); return m ? { model: m[1], cap: +m[2] } : { model: name, cap: 0 }; };
 function renderBoilers() {
+  if (document.activeElement && document.activeElement.classList.contains('pcin')) return;
   const adm = isAdmin();
   $('bAddBox').classList.toggle('hidden', !adm);
   const B = parts.filter(isB);
@@ -1663,7 +1676,7 @@ function renderBoilers() {
     return `<section><h3 style="margin:0 2px 8px;font-size:15px">${esc(g.model)} <span class="help" style="font-weight:700">· ${fmt(sub)}대</span></h3><div class="plist">` + g.items.map(({ p, cap }) => `
     <div class="panel prow" data-id="${esc(p.id)}">
       <div class="pinfo"><span class="pname">${cap}K${pendP[p.id] ? ' ⏳' : ''}</span></div>
-      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button><b class="pc num ${n(p.count) ? '' : 'zero'}">${n(p.count)}</b>${adm ? '<button class="plus" data-pa="+" aria-label="입고 하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button>' : ''}</div>
+      <div class="pctl"><button data-pa="-" aria-label="하나 줄이기">−</button>${cntCell(p)}${adm ? '<button class="plus" data-pa="+" aria-label="입고 하나 늘리기">+</button><button class="del" data-pa="x" aria-label="삭제">✕</button>' : ''}</div>
     </div>`).join('') + '</div></section>';
   }).join('') : '<div class="panel empty"><p><b>등록된 보일러가 없습니다</b></p></div>';
 }
