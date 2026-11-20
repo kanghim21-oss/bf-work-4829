@@ -908,11 +908,11 @@ const moneyIds = ['fCash', 'fAcct', 'fCard', 'fDue', 'fParts', 'fFee'];
 const moneyIds2 = ['fExtra', 'fMat'];
 const getM = id => n(digits($(id).value));
 const setM = (id, v) => { $(id).value = n(v) ? fmt(v) : ''; };
-/* 기사 수당 자동 계산 (이상민·신동하·박병학): (현금 + (계좌+카드)×0.9 − 부속) ÷ 2 */
+/* 기사 수당 자동 계산 (이상민·신동하·박병학): (현금 + (계좌+카드)÷1.1[부가세 제외] − 부속) ÷ 2 */
 const AUTO_FEE = ['이상민', '신동하', '박병학'];
 const INST_W = ['장용건', '박선환'], INST_BASE = 90000, PIPE_COST = 7370;
 let feeManual = false;
-const calcFee = (c, a, k, p) => Math.max(0, Math.round((c + (a + k) * 0.9 - p) / 2));
+const calcFee = (c, a, k, p) => Math.max(0, Math.round((c + (a + k) / 1.1 - p) / 2));
 function instUI() {
   const w = INST_W.includes($('fWorker').value);
   $('instBox').classList.toggle('hidden', !w);
