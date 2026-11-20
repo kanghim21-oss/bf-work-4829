@@ -1319,7 +1319,7 @@ function buildPrint() {
   const s = sums(list), when = S.from ? (S.from === S.to ? S.from : `${S.from} ~ ${S.to || ''}`) : '전체 기간';
   const who = S.worker === 'ALL' ? '전체 기사' : S.worker;
   const rows = list.map(l => `<tr class="${l.isFree ? 'free' : ''}"><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}${l.isFree ? ' (무상)' : ''}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason, l.action].filter(Boolean).join(' / '))}${l.depositor ? ' [' + esc(l.depositor) + ']' : ''}</td><td class="r">${n(l.cash) ? fmt(l.cash) : ''}</td><td class="r">${n(l.account) ? fmt(l.account) : ''}</td><td class="r">${n(l.card) ? fmt(l.card) : ''}</td><td class="r">${n(l.unpaid) ? fmt(l.unpaid) : ''}</td><td class="r">${n(l.partsPrice) ? fmt(l.partsPrice) : ''}</td><td class="r">${fee(l) ? fmt(fee(l)) : ''}</td></tr>`).join('');
-  $('printArea').innerHTML = `<div class="phead"><div><h1>보일러팜 작업일지</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 작업 ${s.cnt}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p></div>
+  $('printArea').innerHTML = `<div class="phead"><div><h1>귀뚜라미 미추홀 대리점 작업일지</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 작업 ${s.cnt}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p></div>
   <table class="psign"><tr><th>경리실장</th><th>대 표</th></tr><tr><td></td><td></td></tr></table></div>
   <table><colgroup><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:21%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:7%"></colgroup>
   <thead><tr><th>날짜</th><th>기사</th><th>주소</th><th>연락처</th><th>내용</th><th>현금</th><th>계좌</th><th>카드</th><th>미수</th><th>부속</th><th>수당</th></tr></thead>
