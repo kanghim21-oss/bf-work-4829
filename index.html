@@ -418,6 +418,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       <button class="btn sm" id="frCsv" type="button">CSV 저장</button>
     </section>
     <section class="sum" id="frSum"></section>
+    <section class="panel" id="frWho" style="padding:12px"></section>
     <section class="panel" id="frParts" style="padding:12px"></section>
     <div id="frList" style="display:grid;gap:10px"></div>
   </div>
@@ -1382,6 +1383,7 @@ function buildPrintFree() {
   const pr = fp.map(p => `<tr><td>${esc(p.name)}</td><td class="r">${p.price ? fmt(p.price) : ''}</td><td class="r">${p.qty}</td><td class="r">${p.price ? fmt(p.qty * p.price) : ''}</td></tr>`).join('');
   $('printArea').innerHTML = `<div class="phead"><div><h1>귀뚜라미 미추홀 대리점 무상 A/S 내역</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 무상 ${rows.length}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p></div>
   <table class="psign"><tr><th>경리실장</th><th>대 표</th></tr><tr><td></td><td></td></tr></table></div>
+  <h1 style="font-size:13px;margin:10px 0 4px">기사별 무상 총합</h1><table style="width:60%"><colgroup><col style="width:34%"><col style="width:20%"><col style="width:20%"><col style="width:26%"></colgroup><thead><tr><th>기사</th><th>건수</th><th>부품</th><th>금액</th></tr></thead><tbody>${[...grp.entries()].map(([w, ls]) => { const p = freeParts(ls); return `<tr><td>${esc(w)}</td><td class="r">${ls.length}건</td><td class="r">${p.reduce((a, x) => a + x.qty, 0)}개</td><td class="r">${fmt(p.reduce((a, x) => a + x.qty * x.price, 0))}</td></tr>`; }).join('')}</tbody><tfoot><tr><td>전체 합계</td><td class="r">${rows.length}건</td><td class="r">${qty}개</td><td class="r">${fmt(amt)}</td></tr></tfoot></table>
   ${tables}
   ${fp.length ? `<h1 style="font-size:13px;margin:12px 0 4px">전체 무상 부품 합계 (${rows.length}건 · ${qty}개 · ${fmt(amt)}원)</h1><table style="width:60%"><colgroup><col style="width:52%"><col style="width:16%"><col style="width:12%"><col style="width:20%"></colgroup><thead><tr><th>부품명</th><th>단가</th><th>수량</th><th>금액</th></tr></thead><tbody>${pr}</tbody></table>` : ''}`;
   document.body.classList.add('doprint');
@@ -1744,6 +1746,9 @@ function renderFree() {
   $('frSum').innerHTML = `<div class="panel tile"><span class="l">무상 건수</span><span class="v num">${rows.length}<small>건</small></span></div>
     <div class="panel tile"><span class="l">무상 부품</span><span class="v num">${fmt(qty)}<small>개</small></span></div>
     <div class="panel tile hero"><span class="l">부품 금액</span><span class="v num">${fmt(amt)}<small>원</small></span></div>`;
+  { const g = new Map(); rows.forEach(l => { (g.get(l.worker) || g.set(l.worker, []).get(l.worker)).push(l); });
+    const tr = [...g.entries()].map(([w, ls]) => { const p = freeParts(ls); return `<tr><td style="padding:6px 0"><b>${esc(w)}</b></td><td style="text-align:right">${ls.length}건</td><td style="text-align:right">${p.reduce((a, x) => a + x.qty, 0)}개</td><td style="text-align:right">${fmt(p.reduce((a, x) => a + x.qty * x.price, 0))}원</td></tr>`; }).join('');
+    $('frWho').innerHTML = `<b>기사별 무상 총합</b><table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><thead><tr style="color:var(--mute,#888)"><td></td><td style="text-align:right">건수</td><td style="text-align:right">부품</td><td style="text-align:right">금액</td></tr></thead><tbody>${tr}</tbody><tfoot><tr style="border-top:2px solid var(--line)"><td style="padding:6px 0"><b>전체 합계</b></td><td style="text-align:right"><b>${rows.length}건</b></td><td style="text-align:right"><b>${qty}개</b></td><td style="text-align:right"><b>${fmt(amt)}원</b></td></tr></tfoot></table>`; }
   $('frParts').innerHTML = `<b>무상 부품 합계</b>` + (fp.length ? `<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px"><tbody>${fp.map(p => `<tr><td style="padding:5px 0">${esc(p.name)}</td><td style="text-align:right;white-space:nowrap">${p.price ? fmt(p.price) + '원' : ''}</td><td style="text-align:right;width:44px"><b>×${p.qty}</b></td></tr>`).join('')}</tbody></table>` : `<div style="margin-top:6px;color:var(--mute,#888);font-size:13px">앱에서 부품을 골라 등록한 무상 건부터 집계됩니다. (이전 건은 아래 조치내역 참고)</div>`);
   const card = l => `<article class="panel card free" data-id="${esc(l.id)}" style="padding:12px">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>${esc((l.date || '').slice(5))} · ${esc(l.worker)}</b><span class="tag t-free">무상 A/S</span></div>
