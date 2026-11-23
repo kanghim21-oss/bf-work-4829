@@ -460,7 +460,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       </div>
       <div class="g2">
         <div class="f"><label for="fPhone">고객 전화</label><input id="fPhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></div>
-        <div class="f"><label for="fModel">보일러 모델</label><input id="fModel" list="modelList" placeholder="예: 귀뚜라미 거꾸로"><datalist id="modelList"></datalist></div>
+        <div class="f"><label for="fModel">보일러 모델</label><input id="fModel" list="modelList" placeholder="목록에서 고르거나 직접 입력 (구형은 직접)"><datalist id="modelList"></datalist></div>
       </div>
       <div class="f"><label for="fReason">접수 내용</label><input id="fReason" placeholder="증상·에러코드">
         <div class="suggest" id="reasonChips"></div></div>
@@ -784,7 +784,7 @@ function render() {
   if (list.length) { S.view === 'cards' ? renderCards(list) : renderTable(list); }
   renderEmpty(list.length);
   renderPill();
-  $('modelList').innerHTML = [...new Set(logs.map(l => l.model).filter(Boolean))].map(m => `<option value="${esc(m)}">`).join('');
+  $('modelList').innerHTML = MODEL_LIST.map(m => `<option value="${esc(m[0])}" label="${esc(m[1])}">`).join('');
 }
 
 function renderTabs(all) {
@@ -984,6 +984,25 @@ function autoFee() {
 function updateLive() { $('livePaid').textContent = won(getM('fCash') + getM('fAcct') + getM('fCard')); }
 
 let lastOpen = [null, undefined];
+const MODEL_LIST = [
+  ['거꾸로 ECO 콘덴싱 L20', '콘덴싱 가스 · 순간식'],
+  ['거꾸로 ECO 콘덴싱 S20', '콘덴싱 가스 · 순간식'],
+  ['거꾸로 ECO 콘덴싱 L11', '콘덴싱 가스 · 순간식'],
+  ['거꾸로 ECO 콘덴싱 L10', '콘덴싱 가스 · 순간식'],
+  ['거꾸로 NEW 콘덴싱 P10', '콘덴싱 가스 · 저탕식'],
+  ['거꾸로 NEW 콘덴싱 L10', '콘덴싱 가스 · 저탕식'],
+  ['거꾸로 콘덴싱 프리미엄', '콘덴싱 가스 · 저탕식'],
+  ['트윈알파 ECO L11', '일반 가스 · 순간식'],
+  ['트윈알파 ECO E11', '일반 가스 · 순간식'],
+  ['트윈알파 ECO L10', '일반 가스 · 순간식'],
+  ['거꾸로 IN L10', '일반 가스 · 저탕식'],
+  ['터보 하이핀 ECO', '기름 · 저탕식'],
+  ['스텐 하이핀 L10', '기름 · 저탕식'],
+  ['저탕식 기름 K시리즈', '기름 · 저탕식'],
+  ['거꾸로 콘덴싱 대용량', '중대형 · 저탕식'],
+  ['저탕식 대용량 T시리즈', '중대형 · 저탕식'],
+  ['소형 전기보일러 KSE', '전기 · 저장식']
+];  // 보일러 모델 자동완성 목록 (직접 입력도 가능)
 function openForm(l, presetWorker) {
   lastOpen = [l, presetWorker];
   $('frm').reset();
