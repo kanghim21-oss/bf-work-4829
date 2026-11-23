@@ -496,7 +496,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
         <div class="f"><label for="fParts">부속원가</label><input id="fParts" class="money" inputmode="numeric" placeholder="0"></div>
         <div class="f"><label for="fFee">기사수당 *</label><input id="fFee" class="money fee-in" inputmode="numeric" placeholder="0"><span id="feeHint" class="help hidden">자동 계산됨 · 직접 고치면 그 금액으로 저장</span></div>
       </div>
-      <label class="freebox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (보일러 설치 영업 — 기사수당과 별도로 수당에 더해집니다)</label>
+      <label class="freebox hidden" id="salesBox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (수리 없이 교체를 권유해 성공한 건 · 고정 50,000원이 수당에 더해집니다)</label>
       <p class="help hidden" id="legacyInst"></p>
     </div>
     <div class="df">
@@ -952,6 +952,9 @@ function instUI() {
   $('instBox').classList.toggle('hidden', !w);
   if (!w) $('fInst').checked = false;
   $('instIn').classList.toggle('hidden', !($('fInst').checked && w));
+  const sw = AUTO_FEE.includes($('fWorker').value);
+  $('salesBox').classList.toggle('hidden', !sw);
+  if (!sw) $('fSales').checked = false;
 }
 function autoFee() {
   instUI();
