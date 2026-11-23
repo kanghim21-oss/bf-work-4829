@@ -496,7 +496,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
         <div class="f"><label for="fParts">부속원가</label><input id="fParts" class="money" inputmode="numeric" placeholder="0"></div>
         <div class="f"><label for="fFee">기사수당 *</label><input id="fFee" class="money fee-in" inputmode="numeric" placeholder="0"><span id="feeHint" class="help hidden">자동 계산됨 · 직접 고치면 그 금액으로 저장</span></div>
       </div>
-      <label class="freebox hidden" id="salesBox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (수리 없이 교체를 권유해 성공한 건 · 고정 50,000원이 수당에 더해집니다)</label>
+      <label class="freebox hidden" id="salesBox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (수리 없이 교체를 권유해 성공한 건 · 체크하면 수당이 50,000원 고정, 다른 금액과 합산되지 않음)</label>
       <p class="help hidden" id="legacyInst"></p>
     </div>
     <div class="df">
@@ -958,6 +958,8 @@ function instUI() {
 }
 function autoFee() {
   instUI();
+  if ($('fSales').checked) { $('fFee').value = fmt(SALES_FEE); $('fFee').readOnly = true; $('feeHint').textContent = '영업비 건 — 수당 50,000원 고정 (다른 금액과 합산 안 됨)'; $('feeHint').classList.remove('hidden'); return; }
+  $('fFee').readOnly = false;
   if (INST_W.includes($('fWorker').value) && $('fInst').checked && !$('fFree').checked) {
     if (feeManual) return;
     const ex = getM('fExtra'), mat = getM('fMat');
@@ -1005,7 +1007,7 @@ function saveForm(e) {
     model: $('fModel').value.trim(), action: $('fAction').value.trim(),
     cash: getM('fCash'), account: getM('fAcct'), card: getM('fCard'), unpaid: getM('fDue'),
     depositor: $('fDep').value.trim(), cardMemo: $('fMemo').value.trim(),
-    partsPrice: getM('fParts'), installFee: (find($('fId').value) || {}).installFee || 0, salesFee: $('fSales').checked ? SALES_FEE : 0, allowance: getM('fFee')
+    partsPrice: getM('fParts'), installFee: $('fSales').checked ? 0 : ((find($('fId').value) || {}).installFee || 0), salesFee: $('fSales').checked ? SALES_FEE : 0, allowance: $('fSales').checked ? 0 : getM('fFee')
   });
   const isNew = !$('fId').value;
   { const m = new Map(((find(id) || {}).usedParts || []).map(u => [u.id, Object.assign({}, u)])); usedParts.forEach(u => { const e = m.get(u.id); if (e) e.qty += u.qty; else m.set(u.id, { id: u.id, name: u.name, qty: u.qty, price: n(u.price) }); }); rec.usedParts = [...m.values()]; }
@@ -1369,6 +1371,7 @@ moneyIds.concat(['dueAmtIn'], moneyIds2).forEach(id => $(id).addEventListener('i
 }));
 $('fWorker').addEventListener('change', () => { feeManual = false; autoFee(); });
 $('fInst').addEventListener('change', () => { feeManual = false; autoFee(); });
+$('fSales').addEventListener('change', () => { feeManual = false; if (!$('fSales').checked) $('fFee').value = ''; autoFee(); });
 $('matChips').addEventListener('click', e => { const b = e.target.closest('[data-mat]'); if (!b) return; matQty[b.dataset.mat] = (matQty[b.dataset.mat] || 0) + 1; feeManual = false; applyMats(); });
 $('matSel').addEventListener('click', e => { if (e.target.id === 'matReset') { matQty = {}; applyMats(); } });
 renderMats();
