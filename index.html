@@ -459,7 +459,10 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
         <div class="f"><label for="fAddr">현장 주소 *</label><input id="fAddr" required placeholder="예: 주안8동 89-20 대진맨션 가동502호"></div>
       </div>
       <div class="g2">
+        <div class="f"><label for="fCust">고객명</label><input id="fCust" placeholder="선택 (비워도 저장됩니다)"></div>
         <div class="f"><label for="fPhone">고객 전화</label><input id="fPhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></div>
+      </div>
+      <div class="g2" style="grid-template-columns:1fr">
         <div class="f"><label for="fModel">보일러 모델</label><input id="fModel" placeholder="목록에서 고르거나 직접 입력 (구형은 직접)"><div id="modelSug" class="hidden" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding:6px 0 2px"></div></div>
       </div>
       <div class="f"><label for="fReason">접수 내용</label><input id="fReason" placeholder="증상·에러코드">
@@ -602,7 +605,7 @@ const SQL = `create table if not exists work_logs (
   id text primary key,
   worker text, date text,
   is_free boolean default false,
-  address text, phone text, reason text, model text, action text,
+  address text, customer text not null default '', phone text, reason text, model text, action text,
   cash bigint default 0, account bigint default 0, card bigint default 0, unpaid bigint default 0,
   depositor text, card_memo text,
   parts_price bigint default 0, install_fee bigint default 0, allowance bigint default 0,
@@ -672,7 +675,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 function normalize(r) {
   return {
     id: String(r.id || uid()), worker: r.worker || '장용건', date: r.date || today(),
-    isFree: !!(r.isFree ?? r.is_free), address: r.address || '', phone: r.phone || '',
+    isFree: !!(r.isFree ?? r.is_free), address: r.address || '', customer: r.customer || '', phone: r.phone || '',
     reason: r.reason || '', model: r.model || '', action: r.action || '',
     cash: n(r.cash), account: n(r.account), card: n(r.card), unpaid: n(r.unpaid),
     depositor: r.depositor || '', cardMemo: r.cardMemo ?? r.card_memo ?? '',
@@ -681,7 +684,7 @@ function normalize(r) {
   };
 }
 const toRow = l => ({
-  id: l.id, worker: l.worker, date: l.date, is_free: !!l.isFree, address: l.address, phone: l.phone,
+  id: l.id, worker: l.worker, date: l.date, is_free: !!l.isFree, address: l.address, customer: l.customer || '', phone: l.phone,
   reason: l.reason, model: l.model, action: l.action, cash: n(l.cash), account: n(l.account),
   card: n(l.card), unpaid: n(l.unpaid), depositor: l.depositor, card_memo: l.cardMemo,
   parts_price: n(l.partsPrice), install_fee: n(l.installFee), sales_fee: n(l.salesFee), allowance: n(l.allowance),
@@ -742,7 +745,7 @@ function base(ignoreWorker) {
     if (!ignoreWorker && S.worker !== 'ALL' && l.worker !== S.worker) return false;
     if (S.onlyDue && !n(l.unpaid)) return false;
     if (q) {
-      const hay = [l.worker, l.address, l.phone, l.model, l.action, l.reason, l.depositor, l.cardMemo].join(' ').toLowerCase();
+      const hay = [l.worker, l.address, l.customer, l.phone, l.model, l.action, l.reason, l.depositor, l.cardMemo].join(' ').toLowerCase();
       if (!hay.includes(q) && !(digits(q) && digits(l.phone).includes(digits(q)))) return false;
     }
     return true;
@@ -839,7 +842,7 @@ function renderCards(list) {
       <span class="who">${esc(l.worker)}</span><span class="date">${esc(l.date.slice(5))}</span>
       ${l.isFree ? '<span class="tag t-free">무상 A/S</span>' : ''}${l.model ? `<span class="tag t-model">${esc(l.model)}</span>` : ''}
     </div>
-    <div class="addr">📍 ${esc(l.address)}</div>
+    <div class="addr">📍 ${esc(l.address)}${l.customer ? ` <span style="font-weight:700">· ${esc(l.customer)}</span>` : ''}</div>
     <div class="contact">
       ${l.phone ? `<a class="btn-s" href="tel:${esc(digits(l.phone))}">📞 ${esc(l.phone)}</a>` : ''}
       <a class="btn-s" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${encodeURIComponent(l.address)}">🗺️ 지도</a>
@@ -866,10 +869,10 @@ function renderCards(list) {
 function renderTable(list) {
   const c = v => n(v) ? fmt(v) : '-';
   $('tableView').innerHTML = `<table><thead><tr>
-    <th>기사</th><th>일자</th><th>주소</th><th>전화</th><th>접수</th><th>조치</th><th>모델</th><th>설치·영업비</th><th>무상</th>
+    <th>기사</th><th>일자</th><th>주소</th><th>고객명</th><th>전화</th><th>접수</th><th>조치</th><th>모델</th><th>설치·영업비</th><th>무상</th>
     <th>현금</th><th>계좌</th><th>카드</th><th>미수</th><th>입금자</th><th>부속</th><th>수당</th><th>관리</th></tr></thead><tbody>
     ${list.map(l => `<tr class="${l.isFree ? 'free' : ''}" data-id="${esc(l.id)}">
-      <td class="l">${esc(l.worker)}${pend[l.id] ? ' ⏳' : ''}</td><td>${esc(l.date.slice(5))}</td><td class="l">${esc(l.address)}</td>
+      <td class="l">${esc(l.worker)}${pend[l.id] ? ' ⏳' : ''}</td><td>${esc(l.date.slice(5))}</td><td class="l">${esc(l.address)}</td><td>${esc(l.customer) || '-'}</td>
       <td>${l.phone ? `<a href="tel:${esc(digits(l.phone))}">${esc(l.phone)}</a>` : '-'}</td><td>${esc(l.reason) || '-'}</td><td class="l">${esc(l.action)}</td><td>${esc(l.model) || '-'}</td>
       <td class="r num">${c(n(l.installFee) + n(l.salesFee))}</td><td style="color:var(--due);font-weight:800">${l.isFree ? '무상' : ''}</td>
       <td class="r num" style="color:var(--cash)">${c(l.cash)}</td><td class="r num" style="color:var(--acct)">${c(l.account)}</td>
@@ -1011,7 +1014,7 @@ function openForm(l, presetWorker) {
   const v = l || { worker: presetWorker || (S.worker !== 'ALL' ? S.worker : (isAdmin() ? '박병학' : Auth.name)), date: (S.from && S.from === S.to) ? S.from : today() };
   $('fWorker').value = v.worker; $('fDate').value = v.date;
   $('fFree').checked = !!v.isFree;
-  $('fAddr').value = v.address || ''; $('fPhone').value = v.phone || ''; $('fModel').value = v.model || '';
+  $('fAddr').value = v.address || ''; $('fCust').value = v.customer || ''; $('fPhone').value = v.phone || ''; $('fModel').value = v.model || '';
   $('fReason').value = v.reason || ''; $('fAction').value = v.action || '';
   setM('fCash', v.cash); setM('fAcct', v.account); setM('fCard', v.card); setM('fDue', v.unpaid);
   $('fDep').value = v.depositor || ''; $('fMemo').value = v.cardMemo || '';
@@ -1030,7 +1033,7 @@ function saveForm(e) {
   const id = $('fId').value || uid();
   const rec = normalize({
     id, worker: $('fWorker').value, date: $('fDate').value, isFree: $('fFree').checked,
-    address: $('fAddr').value.trim(), phone: $('fPhone').value.trim(), reason: $('fReason').value.trim() || (NO_AS_W.includes($('fWorker').value) ? '설치' : ''),
+    address: $('fAddr').value.trim(), customer: $('fCust').value.trim(), phone: $('fPhone').value.trim(), reason: $('fReason').value.trim() || (NO_AS_W.includes($('fWorker').value) ? '설치' : ''),
     model: $('fModel').value.trim(), action: $('fAction').value.trim() || (NO_AS_W.includes($('fWorker').value) ? '설치' : ''),
     cash: getM('fCash'), account: getM('fAcct'), card: getM('fCard'), unpaid: getM('fDue'),
     depositor: $('fDep').value.trim(), cardMemo: $('fMemo').value.trim(),
@@ -1299,8 +1302,8 @@ function download(name, text, type) {
 function csv(list, name) {
   if (!list.length) return toast('내보낼 데이터가 없습니다');
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const head = ['기사', '일자', '주소', '전화', '접수내용', '조치내역', '모델', '무상', '현금', '계좌', '카드', '미수금', '입금자', '카드메모', '부속원가', '설치수당', '영업비', '기사수당', '수당합계'];
-  const rows = list.map(l => [l.worker, l.date, l.address, l.phone, l.reason, l.action, l.model, l.isFree ? '무상' : '유상', n(l.cash), n(l.account), n(l.card), n(l.unpaid), l.depositor, l.cardMemo, n(l.partsPrice), n(l.installFee), n(l.salesFee), n(l.allowance), fee(l)].map(q).join(','));
+  const head = ['기사', '일자', '주소', '고객명', '전화', '접수내용', '조치내역', '모델', '무상', '현금', '계좌', '카드', '미수금', '입금자', '카드메모', '부속원가', '설치수당', '영업비', '기사수당', '수당합계'];
+  const rows = list.map(l => [l.worker, l.date, l.address, l.customer, l.phone, l.reason, l.action, l.model, l.isFree ? '무상' : '유상', n(l.cash), n(l.account), n(l.card), n(l.unpaid), l.depositor, l.cardMemo, n(l.partsPrice), n(l.installFee), n(l.salesFee), n(l.allowance), fee(l)].map(q).join(','));
   download(name, '﻿' + [head.map(q).join(','), ...rows].join('\r\n'), 'text/csv;charset=utf-8');
   toast('엑셀(CSV) 파일을 저장했습니다');
 }
@@ -1422,7 +1425,7 @@ function buildPrintFree() {
   const rows = freeRows().slice().reverse(); if (!rows.length) return false;
   const fp = freeParts(rows), qty = fp.reduce((a, p) => a + p.qty, 0), amt = fp.reduce((a, p) => a + p.qty * p.price, 0);
   const when = FR.mon ? FR.mon.replace('-', '년 ') + '월' : '전체 기간', who = FR.wk === 'ALL' ? '전체 기사' : FR.wk;
-  const row = (l, i) => { const t = (l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0); return `<tr><td class="r">${i + 1}</td><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason].filter(Boolean).join(' / '))}</td><td>${esc(l.action)}</td><td>${esc((l.usedParts || []).map(u => `${u.name} ×${u.qty}`).join(', '))}</td><td class="r">${t ? fmt(t) : ''}</td></tr>`; };
+  const row = (l, i) => { const t = (l.usedParts || []).reduce((a, u) => a + n(u.price) * n(u.qty), 0); return `<tr><td class="r">${i + 1}</td><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}${l.customer ? ' (' + esc(l.customer) + ')' : ''}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason].filter(Boolean).join(' / '))}</td><td>${esc(l.action)}</td><td>${esc((l.usedParts || []).map(u => `${u.name} ×${u.qty}`).join(', '))}</td><td class="r">${t ? fmt(t) : ''}</td></tr>`; };
   const colg = '<colgroup><col style="width:4%"><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:17%"><col style="width:16%"><col style="width:16%"><col style="width:8%"></colgroup>';
   const thead = '<thead><tr><th>No</th><th>날짜</th><th>기사</th><th>주소</th><th>연락처</th><th>모델/접수</th><th>조치내역</th><th>사용부품</th><th>부품금액</th></tr></thead>';
   const grp = new Map(); rows.forEach(l => { (grp.get(l.worker) || grp.set(l.worker, []).get(l.worker)).push(l); });
@@ -1444,7 +1447,7 @@ function buildPrint() {
   if (!list.length) return false;
   const s = sums(list), when = S.from ? (S.from === S.to ? S.from : `${S.from} ~ ${S.to || ''}`) : '전체 기간';
   const who = S.worker === 'ALL' ? '전체 기사' : S.worker;
-  const rows = list.map(l => `<tr class="${l.isFree ? 'free' : ''}"><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}${l.isFree ? ' (무상)' : ''}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason, l.action].filter(Boolean).join(' / '))}${l.depositor ? ' [' + esc(l.depositor) + ']' : ''}</td><td class="r">${n(l.cash) ? fmt(l.cash) : ''}</td><td class="r">${n(l.account) ? fmt(l.account) : ''}</td><td class="r">${n(l.card) ? fmt(l.card) : ''}</td><td class="r">${n(l.unpaid) ? fmt(l.unpaid) : ''}</td><td class="r">${n(l.partsPrice) ? fmt(l.partsPrice) : ''}</td><td class="r">${fee(l) ? fmt(fee(l)) : ''}</td></tr>`).join('');
+  const rows = list.map(l => `<tr class="${l.isFree ? 'free' : ''}"><td>${esc((l.date || '').slice(5))}</td><td>${esc(l.worker)}</td><td>${esc(l.address)}${l.customer ? ' (' + esc(l.customer) + ')' : ''}${l.isFree ? ' (무상)' : ''}</td><td>${esc(l.phone)}</td><td>${esc([l.model, l.reason, l.action].filter(Boolean).join(' / '))}${l.depositor ? ' [' + esc(l.depositor) + ']' : ''}</td><td class="r">${n(l.cash) ? fmt(l.cash) : ''}</td><td class="r">${n(l.account) ? fmt(l.account) : ''}</td><td class="r">${n(l.card) ? fmt(l.card) : ''}</td><td class="r">${n(l.unpaid) ? fmt(l.unpaid) : ''}</td><td class="r">${n(l.partsPrice) ? fmt(l.partsPrice) : ''}</td><td class="r">${fee(l) ? fmt(fee(l)) : ''}</td></tr>`).join('');
   $('printArea').innerHTML = `<div class="phead"><div><h1>귀뚜라미 미추홀 대리점 작업일지</h1><p class="pmeta">${esc(when)} · ${esc(who)} · 작업 ${s.cnt}건 · 출력 ${new Date().toLocaleString('ko-KR')}</p></div>
   <table class="psign"><tr><th>경리실장</th><th>대 표</th></tr><tr><td></td><td></td></tr></table></div>
   <table><colgroup><col style="width:5%"><col style="width:6%"><col style="width:19%"><col style="width:9%"><col style="width:21%"><col style="width:7%"><col style="width:7%"><col style="width:7%"><col style="width:6%"><col style="width:6%"><col style="width:7%"></colgroup>
@@ -2069,7 +2072,7 @@ function logout() {
 const AU = { rows: [], filter: 'all', more: true, loading: false };
 const AU_FILTERS = [['all', '전체'], ['UPDATE', '수정'], ['DELETE', '삭제'], ['INSERT', '등록'], ['work_logs', '일지'], ['stock', '재고']];
 const AU_FLD = {
-  work_logs: { date: '날짜', worker: '기사', address: '주소', phone: '전화', reason: '접수내용', model: '모델', action: '조치', cash: '현금', account: '계좌', card: '카드', unpaid: '미수', depositor: '입금자', card_memo: '카드메모', parts_price: '부속가격', install_fee: '설치수당', sales_fee: '영업비', allowance: '수당', is_free: '무상' },
+  work_logs: { date: '날짜', worker: '기사', address: '주소', customer: '고객명', phone: '전화', reason: '접수내용', model: '모델', action: '조치', cash: '현금', account: '계좌', card: '카드', unpaid: '미수', depositor: '입금자', card_memo: '카드메모', parts_price: '부속가격', install_fee: '설치수당', sales_fee: '영업비', allowance: '수당', is_free: '무상' },
   parts: { name: '품명', page: '페이지', count: '수량' },
   part_moves: { worker: '기사', part_name: '부품', qty: '수량', kind: '구분', date: '날짜' }
 };
