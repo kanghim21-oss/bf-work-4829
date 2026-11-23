@@ -496,6 +496,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
         <div class="f"><label for="fParts">부속원가</label><input id="fParts" class="money" inputmode="numeric" placeholder="0"></div>
         <div class="f"><label for="fFee">기사수당 *</label><input id="fFee" class="money fee-in" inputmode="numeric" placeholder="0"><span id="feeHint" class="help hidden">자동 계산됨 · 직접 고치면 그 금액으로 저장</span></div>
       </div>
+      <label class="freebox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (보일러 설치 영업 — 기사수당과 별도로 수당에 더해집니다)</label>
       <p class="help hidden" id="legacyInst"></p>
     </div>
     <div class="df">
@@ -536,7 +537,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
   <div class="db">
     <div class="mnav"><button id="mPrev" aria-label="이전 달">◀</button><b id="mLabel"></b><button id="mNext" aria-label="다음 달">▶</button></div>
     <div id="mBody"></div>
-    <p class="help" style="margin:10px 2px 0">1일부터 말일까지 · 수당 + 설치수당 합산 · 기사 이름을 누르면 날짜별로 펼쳐집니다</p>
+    <p class="help" style="margin:10px 2px 0">1일부터 말일까지 · 수당 + 설치수당 + 영업비 합산 · 기사 이름을 누르면 날짜별로 펼쳐집니다</p>
   </div>
   <div class="df"><button class="btn brand" id="mCopy">복사하기</button></div>
 </dialog>
@@ -608,6 +609,7 @@ const SQL = `create table if not exists work_logs (
 );
 alter table work_logs add column if not exists card_memo text;
 alter table work_logs add column if not exists install_fee bigint default 0;
+alter table work_logs add column if not exists sales_fee bigint default 0;
 
 alter table work_logs enable row level security;
 drop policy if exists "allow all" on work_logs;
@@ -660,7 +662,8 @@ const pad = x => String(x).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => ymd(new Date());
 const addDays = (s, k) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + k); return ymd(d); };
-const fee = l => n(l.allowance) + n(l.installFee);
+const SALES_FEE = 50000;
+const fee = l => n(l.allowance) + n(l.installFee) + n(l.salesFee);
 const paid = l => n(l.cash) + n(l.account) + n(l.card);
 const digits = s => String(s || '').replace(/\D/g, '');
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -672,7 +675,7 @@ function normalize(r) {
     reason: r.reason || '', model: r.model || '', action: r.action || '',
     cash: n(r.cash), account: n(r.account), card: n(r.card), unpaid: n(r.unpaid),
     depositor: r.depositor || '', cardMemo: r.cardMemo ?? r.card_memo ?? '',
-    partsPrice: n(r.partsPrice ?? r.parts_price), installFee: n(r.installFee ?? r.install_fee), allowance: n(r.allowance),
+    partsPrice: n(r.partsPrice ?? r.parts_price), installFee: n(r.installFee ?? r.install_fee), salesFee: n(r.salesFee ?? r.sales_fee), allowance: n(r.allowance),
     usedParts: (() => { const u = r.usedParts ?? r.used_parts; return Array.isArray(u) ? u : []; })()
   };
 }
@@ -680,7 +683,7 @@ const toRow = l => ({
   id: l.id, worker: l.worker, date: l.date, is_free: !!l.isFree, address: l.address, phone: l.phone,
   reason: l.reason, model: l.model, action: l.action, cash: n(l.cash), account: n(l.account),
   card: n(l.card), unpaid: n(l.unpaid), depositor: l.depositor, card_memo: l.cardMemo,
-  parts_price: n(l.partsPrice), install_fee: n(l.installFee), allowance: n(l.allowance),
+  parts_price: n(l.partsPrice), install_fee: n(l.installFee), sales_fee: n(l.salesFee), allowance: n(l.allowance),
   used_parts: l.usedParts || []
 });
 
@@ -845,6 +848,7 @@ function renderCards(list) {
       <div><span>접수</span><span>${esc(l.reason) || '-'}</span></div>
       <div><span>조치</span><span style="color:var(--blue)">${esc(l.action)}</span></div>
       ${n(l.installFee) ? `<div><span>설치수당</span><span style="color:var(--cash)">+${fmt(l.installFee)}원</span></div>` : ''}
+      ${n(l.salesFee) ? `<div><span>영업비</span><span style="color:var(--cash)">+${fmt(l.salesFee)}원</span></div>` : ''}
       ${l.cardMemo ? `<div class="memo" style="display:block">💳 ${esc(l.cardMemo)}</div>` : ''}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${payTags(l)}</div>
@@ -862,12 +866,12 @@ function renderCards(list) {
 function renderTable(list) {
   const c = v => n(v) ? fmt(v) : '-';
   $('tableView').innerHTML = `<table><thead><tr>
-    <th>기사</th><th>일자</th><th>주소</th><th>전화</th><th>접수</th><th>조치</th><th>모델</th><th>설치수당</th><th>무상</th>
+    <th>기사</th><th>일자</th><th>주소</th><th>전화</th><th>접수</th><th>조치</th><th>모델</th><th>설치·영업비</th><th>무상</th>
     <th>현금</th><th>계좌</th><th>카드</th><th>미수</th><th>입금자</th><th>부속</th><th>수당</th><th>관리</th></tr></thead><tbody>
     ${list.map(l => `<tr class="${l.isFree ? 'free' : ''}" data-id="${esc(l.id)}">
       <td class="l">${esc(l.worker)}${pend[l.id] ? ' ⏳' : ''}</td><td>${esc(l.date.slice(5))}</td><td class="l">${esc(l.address)}</td>
       <td>${l.phone ? `<a href="tel:${esc(digits(l.phone))}">${esc(l.phone)}</a>` : '-'}</td><td>${esc(l.reason) || '-'}</td><td class="l">${esc(l.action)}</td><td>${esc(l.model) || '-'}</td>
-      <td class="r num">${c(l.installFee)}</td><td style="color:var(--due);font-weight:800">${l.isFree ? '무상' : ''}</td>
+      <td class="r num">${c(n(l.installFee) + n(l.salesFee))}</td><td style="color:var(--due);font-weight:800">${l.isFree ? '무상' : ''}</td>
       <td class="r num" style="color:var(--cash)">${c(l.cash)}</td><td class="r num" style="color:var(--acct)">${c(l.account)}</td>
       <td class="r num" style="color:var(--card)">${c(l.card)}</td><td class="r num" style="color:var(--due)">${c(l.unpaid)}</td>
       <td>${esc(l.depositor) || '-'}</td><td class="r num">${c(l.partsPrice)}</td><td class="r num" style="font-weight:800;background:var(--fee-bg);color:var(--fee)">${fmt(fee(l))}</td>
@@ -980,6 +984,7 @@ function openForm(l, presetWorker) {
   setM('fCash', v.cash); setM('fAcct', v.account); setM('fCard', v.card); setM('fDue', v.unpaid);
   $('fDep').value = v.depositor || ''; $('fMemo').value = v.cardMemo || '';
   setM('fParts', v.partsPrice); setM('fFee', v.allowance);
+  $('fSales').checked = n(v.salesFee) > 0;
   $('legacyInst').textContent = n(v.installFee) ? `이 건에는 기존 설치수당 ${fmt(v.installFee)}원이 수당 합계에 포함되어 있습니다.` : '';
   $('legacyInst').classList.toggle('hidden', !n(v.installFee));
   feeManual = false; $('fInst').checked = false; $('fExtra').value = ''; $('fMat').value = ''; matQty = {}; renderMats();
@@ -997,7 +1002,7 @@ function saveForm(e) {
     model: $('fModel').value.trim(), action: $('fAction').value.trim(),
     cash: getM('fCash'), account: getM('fAcct'), card: getM('fCard'), unpaid: getM('fDue'),
     depositor: $('fDep').value.trim(), cardMemo: $('fMemo').value.trim(),
-    partsPrice: getM('fParts'), installFee: (find($('fId').value) || {}).installFee || 0, allowance: getM('fFee')
+    partsPrice: getM('fParts'), installFee: (find($('fId').value) || {}).installFee || 0, salesFee: $('fSales').checked ? SALES_FEE : 0, allowance: getM('fFee')
   });
   const isNew = !$('fId').value;
   { const m = new Map(((find(id) || {}).usedParts || []).map(u => [u.id, Object.assign({}, u)])); usedParts.forEach(u => { const e = m.get(u.id); if (e) e.qty += u.qty; else m.set(u.id, { id: u.id, name: u.name, qty: u.qty, price: n(u.price) }); }); rec.usedParts = [...m.values()]; }
@@ -1252,8 +1257,8 @@ function download(name, text, type) {
 function csv(list, name) {
   if (!list.length) return toast('내보낼 데이터가 없습니다');
   const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const head = ['기사', '일자', '주소', '전화', '접수내용', '조치내역', '모델', '무상', '현금', '계좌', '카드', '미수금', '입금자', '카드메모', '부속원가', '설치수당', '기사수당', '수당합계'];
-  const rows = list.map(l => [l.worker, l.date, l.address, l.phone, l.reason, l.action, l.model, l.isFree ? '무상' : '유상', n(l.cash), n(l.account), n(l.card), n(l.unpaid), l.depositor, l.cardMemo, n(l.partsPrice), n(l.installFee), n(l.allowance), fee(l)].map(q).join(','));
+  const head = ['기사', '일자', '주소', '전화', '접수내용', '조치내역', '모델', '무상', '현금', '계좌', '카드', '미수금', '입금자', '카드메모', '부속원가', '설치수당', '영업비', '기사수당', '수당합계'];
+  const rows = list.map(l => [l.worker, l.date, l.address, l.phone, l.reason, l.action, l.model, l.isFree ? '무상' : '유상', n(l.cash), n(l.account), n(l.card), n(l.unpaid), l.depositor, l.cardMemo, n(l.partsPrice), n(l.installFee), n(l.salesFee), n(l.allowance), fee(l)].map(q).join(','));
   download(name, '﻿' + [head.map(q).join(','), ...rows].join('\r\n'), 'text/csv;charset=utf-8');
   toast('엑셀(CSV) 파일을 저장했습니다');
 }
@@ -1439,7 +1444,7 @@ function monthRows(ym) {
     const mine = list.filter(l => l.worker === w.name);
     const days = {};
     mine.forEach(l => { const d = days[l.date] || (days[l.date] = { cnt: 0, fee: 0 }); d.cnt++; d.fee += fee(l); });
-    return { w, s: sums(mine), allow: mine.reduce((a, l) => a + n(l.allowance), 0), inst: mine.reduce((a, l) => a + n(l.installFee), 0), days };
+    return { w, s: sums(mine), allow: mine.reduce((a, l) => a + n(l.allowance), 0), inst: mine.reduce((a, l) => a + n(l.installFee) + n(l.salesFee), 0), days };
   });
 }
 function monthLabel(ym) { return `${ym.slice(0, 4)}년 ${+ym.slice(5)}월`; }
@@ -1447,7 +1452,7 @@ function renderMonth() {
   const ym = MON.ym, rows = monthRows(ym), T = sums(logs.filter(l => (l.date || '').slice(0, 7) === ym));
   const last = new Date(+ym.slice(0, 4), +ym.slice(5), 0).getDate();
   $('mLabel').textContent = monthLabel(ym);
-  $('mBody').innerHTML = `<table class="mt"><thead><tr><th>기사</th><th>건수</th><th>수당</th><th>설치수당</th><th>합계</th></tr></thead><tbody>
+  $('mBody').innerHTML = `<table class="mt"><thead><tr><th>기사</th><th>건수</th><th>수당</th><th>설치·영업비</th><th>합계</th></tr></thead><tbody>
   ${rows.map(({ w, s, allow, inst, days }) => `<tr class="w" data-w="${esc(w.name)}"><td>${esc(w.name)} <small style="color:var(--muted)">${MON.open === w.name ? '▲' : '▼'}</small></td><td class="num">${s.cnt}</td><td class="num">${fmt(allow)}</td><td class="num">${inst ? fmt(inst) : '-'}</td><td class="num fee">${fmt(s.fee)}</td></tr>`
     + (MON.open === w.name ? Object.keys(days).sort().map(d => `<tr class="dd"><td>${+d.slice(5, 7)}/${+d.slice(8)}</td><td class="num">${days[d].cnt}건</td><td></td><td></td><td class="num">${fmt(days[d].fee)}</td></tr>`).join('') || '<tr class="dd"><td colspan="5">이 달 일지가 없습니다</td></tr>' : '')).join('')}
   </tbody><tfoot><tr><td>${isAdmin() ? '전체' : '이달 합계'}</td><td class="num">${T.cnt}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.allow, 0))}</td><td class="num">${fmt(rows.reduce((a, r) => a + r.inst, 0))}</td><td class="num">${fmt(T.fee)}</td></tr></tfoot></table>`;
@@ -1982,11 +1987,11 @@ function logout() {
 const AU = { rows: [], filter: 'all', more: true, loading: false };
 const AU_FILTERS = [['all', '전체'], ['UPDATE', '수정'], ['DELETE', '삭제'], ['INSERT', '등록'], ['work_logs', '일지'], ['stock', '재고']];
 const AU_FLD = {
-  work_logs: { date: '날짜', worker: '기사', address: '주소', phone: '전화', reason: '접수내용', model: '모델', action: '조치', cash: '현금', account: '계좌', card: '카드', unpaid: '미수', depositor: '입금자', card_memo: '카드메모', parts_price: '부속가격', install_fee: '설치수당', allowance: '수당', is_free: '무상' },
+  work_logs: { date: '날짜', worker: '기사', address: '주소', phone: '전화', reason: '접수내용', model: '모델', action: '조치', cash: '현금', account: '계좌', card: '카드', unpaid: '미수', depositor: '입금자', card_memo: '카드메모', parts_price: '부속가격', install_fee: '설치수당', sales_fee: '영업비', allowance: '수당', is_free: '무상' },
   parts: { name: '품명', page: '페이지', count: '수량' },
   part_moves: { worker: '기사', part_name: '부품', qty: '수량', kind: '구분', date: '날짜' }
 };
-const AU_MONEY = new Set(['cash', 'account', 'card', 'unpaid', 'parts_price', 'install_fee', 'allowance']);
+const AU_MONEY = new Set(['cash', 'account', 'card', 'unpaid', 'parts_price', 'install_fee', 'sales_fee', 'allowance']);
 const AU_TBL = { work_logs: '일지', parts: '재고', part_moves: '반출·반납' };
 const AU_OP = { INSERT: '등록', UPDATE: '수정', DELETE: '삭제' };
 function auVal(tbl, k, v) {
@@ -2008,7 +2013,7 @@ function auChanges(r) {
     return Object.keys(f).filter(k => String(o[k] ?? '') !== String(nw[k] ?? '')).map(k => `<span><b>${esc(f[k])}</b> <i>${esc(auVal(r.tbl, k, o[k]))}</i> → ${esc(auVal(r.tbl, k, nw[k]))}</span>`);
   }
   const x = r.new_row || r.old_row || {};
-  if (r.tbl === 'work_logs') return [`<span><i>수납 ${fmt(n(x.cash) + n(x.account) + n(x.card))}원 · 수당 ${fmt(n(x.allowance) + n(x.install_fee))}원${x.action ? ' · ' + esc(x.action) : ''}</i></span>`];
+  if (r.tbl === 'work_logs') return [`<span><i>수납 ${fmt(n(x.cash) + n(x.account) + n(x.card))}원 · 수당 ${fmt(n(x.allowance) + n(x.install_fee) + n(x.sales_fee))}원${x.action ? ' · ' + esc(x.action) : ''}</i></span>`];
   return [];
 }
 function auDate(at) { return new Date(at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }); }
