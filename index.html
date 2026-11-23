@@ -500,6 +500,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       <p class="help hidden" id="legacyInst"></p>
     </div>
     <div class="df">
+      <button type="button" class="btn" id="fReset" title="처음 열었을 때 상태로 되돌립니다">↺ 초기화</button>
       <button type="button" class="btn" data-close>취소</button>
       <button type="submit" class="btn primary">저장</button>
     </div>
@@ -982,7 +983,9 @@ function autoFee() {
 }
 function updateLive() { $('livePaid').textContent = won(getM('fCash') + getM('fAcct') + getM('fCard')); }
 
+let lastOpen = [null, undefined];
 function openForm(l, presetWorker) {
+  lastOpen = [l, presetWorker];
   $('frm').reset();
   $('fWorker').innerHTML = WORKERS.filter(w => isAdmin() || w.name === Auth.name).map(w => `<option value="${esc(w.name)}">${esc(w.name)}${w.tag ? ' (' + esc(w.tag) + ')' : ''}</option>`).join('');
   $('fId').value = l ? l.id : '';
@@ -1874,7 +1877,17 @@ $('pAdd').onclick = () => {
   $('pName').value = ''; $('pQty').value = '1'; renderUsed(); syncPartsCost();
 };
 $('pQty').addEventListener('input', e => { e.target.value = digits(e.target.value); });
-$('usedChips').addEventListener('click', e => { const b = e.target.closest('[data-ui]'); if (b) { usedParts.splice(+b.dataset.ui, 1); renderUsed(); syncPartsCost(); } });
+$('usedChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-ui]'); if (!b) return;
+  const u = usedParts.splice(+b.dataset.ui, 1)[0];
+  if (u) { // 조치내역에 자동으로 붙은 부품명도 함께 지움
+    const f = $('fAction'), esc2 = u.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(, )?' + esc2 + '( ×\\d+)?(?!.*' + esc2 + '( ×\\d+)?)');
+    f.value = f.value.replace(re, '').replace(/^, /, '').trim();
+  }
+  renderUsed(); syncPartsCost();
+});
+$('fReset').onclick = () => { openForm(lastOpen[0], lastOpen[1]); toast('처음 상태로 되돌렸습니다 (저장 전까지 재고는 그대로입니다)'); };
 $('fParts').addEventListener('input', () => { partsBase = Math.max(0, getM('fParts') - usedSum()); });
 
 /* 홈 화면 앱 (PWA): 서비스 워커 등록 */
