@@ -460,7 +460,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       </div>
       <div class="g2">
         <div class="f"><label for="fPhone">고객 전화</label><input id="fPhone" type="tel" inputmode="tel" placeholder="010-0000-0000"></div>
-        <div class="f"><label for="fModel">보일러 모델</label><input id="fModel" list="modelList" placeholder="목록에서 고르거나 직접 입력 (구형은 직접)"><datalist id="modelList"></datalist></div>
+        <div class="f"><label for="fModel">보일러 모델</label><input id="fModel" placeholder="목록에서 고르거나 직접 입력 (구형은 직접)"><div id="modelSug" class="hidden" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow:auto;padding:6px 0 2px"></div></div>
       </div>
       <div class="f"><label for="fReason">접수 내용</label><input id="fReason" placeholder="증상·에러코드">
         <div class="suggest" id="reasonChips"></div></div>
@@ -784,7 +784,6 @@ function render() {
   if (list.length) { S.view === 'cards' ? renderCards(list) : renderTable(list); }
   renderEmpty(list.length);
   renderPill();
-  $('modelList').innerHTML = MODEL_LIST.map(m => `<option value="${esc(m[0])}" label="${esc(m[1])}">`).join('');
 }
 
 function renderTabs(all) {
@@ -1905,6 +1904,19 @@ $('pAdd').onclick = () => {
   const f = $('fAction'); f.value = (f.value ? f.value + ', ' : '') + p.name + (qty > 1 ? ` ×${qty}` : '');
   $('pName').value = ''; $('pQty').value = '1'; renderUsed(); syncPartsCost();
 };
+/* 보일러 모델 추천 목록 (아이폰 사파리 datalist 지연 문제로 직접 구현) */
+function modelSug() {
+  const q = $('fModel').value.trim().toLowerCase().replace(/\s+/g, '');
+  const L = MODEL_LIST.filter(m => !q || m[0].toLowerCase().replace(/\s+/g, '').includes(q));
+  const box = $('modelSug');
+  box.innerHTML = L.map(m => `<button type="button" class="chip" data-md="${esc(m[0])}">${esc(m[0])} <small>${esc(m[1])}</small></button>`).join('');
+  box.classList.toggle('hidden', !L.length);
+}
+$('fModel').addEventListener('focus', modelSug);
+$('fModel').addEventListener('input', modelSug);
+$('modelSug').addEventListener('pointerdown', e => { if (e.target.closest('[data-md]')) e.preventDefault(); });
+$('modelSug').addEventListener('click', e => { const b = e.target.closest('[data-md]'); if (!b) return; $('fModel').value = b.dataset.md; $('modelSug').classList.add('hidden'); });
+$('fModel').addEventListener('blur', () => setTimeout(() => $('modelSug').classList.add('hidden'), 200));
 $('pQty').addEventListener('input', e => { e.target.value = digits(e.target.value); });
 $('usedChips').addEventListener('click', e => {
   const sb = e.target.closest('[data-si]');
