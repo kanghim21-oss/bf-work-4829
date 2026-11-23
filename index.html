@@ -934,6 +934,7 @@ const setM = (id, v) => { $(id).value = n(v) ? fmt(v) : ''; };
 /* 기사 수당 자동 계산 (이상민·신동하·박병학): (현금 + (계좌+카드)×0.9[부가세 10% 제외] − 부속) ÷ 2 */
 const AUTO_FEE = ['이상민', '신동하', '박병학'];
 const INST_W = ['장용건', '박선환'], INST_BASE = 90000;
+const NO_AS_W = ['장용건', '박선환', '양지만'];   // 설치기사: 접수내용·조치내역·사용부품 입력칸 숨김(AS 팀장 전용)
 const MATS = [['가스호스 1m', 7370], ['나비벨브', 2500], ['단엘보', 2900], ['U곡관', 4200], ['45도', 2800], ['연장 150', 2000], ['연장 200', 2000], ['연장 300', 2300], ['연장 500', 2700], ['연장 1000', 4000]];
 let matQty = {};
 function renderMats() {
@@ -949,6 +950,11 @@ let feeManual = false;
 const calcFee = (c, a, k, p) => Math.max(0, Math.round((c + (a + k) * 0.9 - p) / 2));
 function instUI() {
   const w = INST_W.includes($('fWorker').value);
+  const noAS = NO_AS_W.includes($('fWorker').value);
+  $('fReason').closest('.f').classList.toggle('hidden', noAS);
+  $('fAction').closest('.f').classList.toggle('hidden', noAS);
+  $('fAction').required = !noAS;
+  $('partsPick').classList.toggle('hidden', noAS || !parts.length);
   $('instBox').classList.toggle('hidden', !w);
   if (!w) $('fInst').checked = false;
   $('instIn').classList.toggle('hidden', !($('fInst').checked && w));
@@ -1003,8 +1009,8 @@ function saveForm(e) {
   const id = $('fId').value || uid();
   const rec = normalize({
     id, worker: $('fWorker').value, date: $('fDate').value, isFree: $('fFree').checked,
-    address: $('fAddr').value.trim(), phone: $('fPhone').value.trim(), reason: $('fReason').value.trim(),
-    model: $('fModel').value.trim(), action: $('fAction').value.trim(),
+    address: $('fAddr').value.trim(), phone: $('fPhone').value.trim(), reason: $('fReason').value.trim() || (NO_AS_W.includes($('fWorker').value) ? '설치' : ''),
+    model: $('fModel').value.trim(), action: $('fAction').value.trim() || (NO_AS_W.includes($('fWorker').value) ? '설치' : ''),
     cash: getM('fCash'), account: getM('fAcct'), card: getM('fCard'), unpaid: getM('fDue'),
     depositor: $('fDep').value.trim(), cardMemo: $('fMemo').value.trim(),
     partsPrice: getM('fParts'), installFee: $('fSales').checked ? 0 : ((find($('fId').value) || {}).installFee || 0), salesFee: $('fSales').checked ? SALES_FEE : 0, allowance: $('fSales').checked ? 0 : getM('fFee')
@@ -1735,7 +1741,7 @@ function renderUsed() {
 function initUsed(show) {
   usedParts = []; partsBase = getM('fParts'); renderUsed();
   $('partList').innerHTML = parts.map(p => `<option value="${esc(p.name)}">`).join('');
-  $('partsPick').classList.toggle('hidden', !show || !parts.length);
+  $('partsPick').classList.toggle('hidden', !show || !parts.length || NO_AS_W.includes($('fWorker').value));
   $('pName').value = ''; $('pQty').value = '1';
 }
 
