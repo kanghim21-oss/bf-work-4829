@@ -1019,12 +1019,22 @@ function saveForm(e) {
     partsPrice: getM('fParts'), installFee: $('fSales').checked ? 0 : ((find($('fId').value) || {}).installFee || 0), salesFee: $('fSales').checked ? SALES_FEE : 0, allowance: $('fSales').checked ? 0 : getM('fFee')
   });
   const isNew = !$('fId').value;
-  { const m = new Map(((find(id) || {}).usedParts || []).map(u => [u.id, Object.assign({}, u)])); usedParts.forEach(u => { const e = m.get(u.id); if (e) e.qty += u.qty; else m.set(u.id, { id: u.id, name: u.name, qty: u.qty, price: n(u.price) }); }); rec.usedParts = [...m.values()]; }
+  { const m = new Map(((find(id) || {}).usedParts || []).filter(u => !undoUsed.some(x => x.id === u.id)).map(u => [u.id, Object.assign({}, u)])); usedParts.forEach(u => { const e = m.get(u.id); if (e) e.qty += u.qty; else m.set(u.id, { id: u.id, name: u.name, qty: u.qty, price: n(u.price) }); }); rec.usedParts = [...m.values()]; }
   let usedMsg = '';
+  if (undoUsed.length) {
+    let k = 0;
+    undoUsed.forEach(u => {
+      const p = findP(u.id); if (!p) return;
+      p.count = n(p.count) + n(u.qty); pendP[p.id] = 'up'; k += n(u.qty);
+      const mv = [...moves].reverse().find(x => x.kind === 'use' && x.partId === p.id && x.worker === rec.worker && n(x.qty) === n(u.qty));
+      if (mv) { moves = moves.filter(x => x.id !== mv.id); pendM[mv.id] = 'del'; }
+    });
+    savePartsLS(); savePendP(); saveMovesLS(); savePendM(); usedMsg = ` · 재고 ${k}개 복구`;
+  }
   if (usedParts.length) {
     let k = 0;
     usedParts.forEach(u => { const p = findP(u.id); if (p) { p.count = Math.max(0, n(p.count) - u.qty); pendP[p.id] = 'up'; k += u.qty; addMove(p, rec.worker, 'use', u.qty); } });
-    savePartsLS(); savePendP(); usedMsg = ` · 재고 ${k}개 차감`;
+    savePartsLS(); savePendP(); usedMsg += ` · 재고 ${k}개 차감`;
   }
   upsertLocal(rec);
   $('dlgForm').close();
@@ -1735,14 +1745,14 @@ function startMovesRealtime() {
 }
 
 /* 작업 등록 시 사용 부품 */
-let usedParts = [], partsBase = 0;
+let usedParts = [], partsBase = 0, savedUsed = [], undoUsed = [];
 const usedSum = () => usedParts.reduce((a, u) => a + n(u.price) * u.qty, 0);
 function syncPartsCost() { if (!usedParts.some(u => u.price) && !usedSum()) { setM('fParts', partsBase); } else setM('fParts', partsBase + usedSum()); updateLive(); autoFee(); }
 function renderUsed() {
-  $('usedChips').innerHTML = usedParts.map((u, i) => `<button type="button" data-ui="${i}">${esc(u.name)} ×${u.qty} ✕</button>`).join('');
+  $('usedChips').innerHTML = savedUsed.map((u, i) => `<button type="button" data-si="${i}" style="border-style:dashed" title="저장된 사용부품 — 누르면 취소하고 재고 복구">저장됨 ${esc(u.name)} ×${u.qty} ↩</button>`).join('') + usedParts.map((u, i) => `<button type="button" data-ui="${i}">${esc(u.name)} ×${u.qty} ✕</button>`).join('');
 }
 function initUsed(show) {
-  usedParts = []; partsBase = getM('fParts'); renderUsed();
+  usedParts = []; undoUsed = []; savedUsed = (((find($('fId').value) || {}).usedParts) || []).map(u => Object.assign({}, u)); partsBase = getM('fParts'); renderUsed();
   $('partList').innerHTML = parts.map(p => `<option value="${esc(p.name)}">`).join('');
   $('partsPick').classList.toggle('hidden', !show || !parts.length || NO_AS_W.includes($('fWorker').value));
   $('pName').value = ''; $('pQty').value = '1';
@@ -1878,6 +1888,19 @@ $('pAdd').onclick = () => {
 };
 $('pQty').addEventListener('input', e => { e.target.value = digits(e.target.value); });
 $('usedChips').addEventListener('click', e => {
+  const sb = e.target.closest('[data-si]');
+  if (sb) { // 이미 저장된 사용부품 취소 (저장 시 재고 복구)
+    const u = savedUsed.splice(+sb.dataset.si, 1)[0];
+    if (u) {
+      undoUsed.push(u);
+      const f = $('fAction'), esc2 = u.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      f.value = f.value.replace(new RegExp('(, )?' + esc2 + '( ×\\d+)?(?!.*' + esc2 + '( ×\\d+)?)'), '').replace(/^, /, '').trim();
+      partsBase = Math.max(0, partsBase - n(u.price) * n(u.qty));
+      renderUsed(); setM('fParts', partsBase + usedSum()); updateLive(); autoFee();
+      toast(`${u.name} ×${u.qty} 취소 — 저장하면 재고가 복구됩니다`);
+    }
+    return;
+  }
   const b = e.target.closest('[data-ui]'); if (!b) return;
   const u = usedParts.splice(+b.dataset.ui, 1)[0];
   if (u) { // 조치내역에 자동으로 붙은 부품명도 함께 지움
