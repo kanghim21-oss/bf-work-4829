@@ -469,8 +469,8 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
         <div class="suggest" id="reasonChips"></div></div>
       <div class="f"><label for="fAction">조치 내역 *</label><input id="fAction" required placeholder="예: 펌프 114 교체, 점화봉 교체"></div>
       <div class="f" id="partsPick"><label>사용 부품 (고르면 재고에서 차감)</label>
-        <div class="usedrow"><input id="pName" list="partList" placeholder="부품명 검색" style="flex:1"><input id="pQty" class="money" inputmode="numeric" value="1" style="width:64px;flex:none"><button type="button" class="btn sm" id="pAdd">추가</button></div>
-        <datalist id="partList"></datalist><div class="suggest" id="usedChips"></div></div>
+        <div class="usedrow"><input id="pName" placeholder="부품명 검색 (코드·이름 일부)" autocomplete="off" style="flex:1"><input id="pQty" class="money" inputmode="numeric" value="1" style="width:64px;flex:none"><button type="button" class="btn sm" id="pAdd">추가</button></div>
+        <div id="partSug" class="hidden" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto;margin-top:6px"></div><div class="suggest" id="usedChips"></div></div>
 
       <div class="paybox">
         <div class="hd"><span>💳 수납</span><span class="help">해당 수단에 금액 입력</span></div>
@@ -1605,7 +1605,6 @@ function renderParts() {
     </div>`).join('');
   const em = $('pEmpty'); em.classList.toggle('hidden', list.length > 0 || who);
   if (!list.length) em.innerHTML = PA.length ? '<p><b>조건에 맞는 부품이 없습니다</b></p>' : `<div class="big">🔧</div><p><b>등록된 부품이 없습니다</b></p>${PARTS_SEED.length ? `<div class="btns"><button class="btn sm brand" data-pseed>기존 부품 재고 ${PARTS_SEED.length}종 불러오기</button></div>` : ''}`;
-  $('partList').innerHTML = PA.map(p => `<option value="${esc(p.name)}">`).join('');
 }
 
 function reconcileP(cloud) {
@@ -1774,7 +1773,7 @@ function renderUsed() {
 }
 function initUsed(show) {
   usedParts = []; undoUsed = []; savedUsed = (((find($('fId').value) || {}).usedParts) || []).map(u => Object.assign({}, u)); partsBase = getM('fParts'); renderUsed();
-  $('partList').innerHTML = parts.map(p => `<option value="${esc(p.name)}">`).join('');
+  $('partSug').classList.add('hidden');
   $('partsPick').classList.toggle('hidden', !show || !parts.length || NO_AS_W.includes($('fWorker').value));
   $('pName').value = ''; $('pQty').value = '1';
 }
@@ -1901,11 +1900,11 @@ $('newPart').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preve
 $('pAdd').onclick = () => {
   const name = $('pName').value.trim().toLowerCase(); if (!name) return;
   const PA = parts.filter(x => !isB(x)); const p = PA.find(x => x.name.toLowerCase() === name) || (PA.filter(x => x.name.toLowerCase().includes(name)).length === 1 ? PA.find(x => x.name.toLowerCase().includes(name)) : null);
-  if (!p) return toast('재고 목록에 없는 부품입니다 (목록에서 골라주세요)');
+  if (!p) { partSug(); return toast(PA.filter(x => x.name.toLowerCase().includes(name)).length > 1 ? '여러 부품이 일치합니다 — 아래 목록에서 눌러 선택하세요' : '재고 목록에 없는 부품입니다'); }
   const qty = Math.max(1, getM('pQty') || 1);
   const ex = usedParts.find(u => u.id === p.id); if (ex) ex.qty += qty; else usedParts.push({ id: p.id, name: p.name, qty, price: n(p.price) });
   const f = $('fAction'); f.value = (f.value ? f.value + ', ' : '') + p.name + (qty > 1 ? ` ×${qty}` : '');
-  $('pName').value = ''; $('pQty').value = '1'; renderUsed(); syncPartsCost();
+  $('pName').value = ''; $('pQty').value = '1'; renderUsed(); syncPartsCost(); $('partSug').classList.add('hidden');
 };
 /* 보일러 모델 추천 목록 (아이폰 사파리 datalist 지연 문제로 직접 구현) */
 function modelSug() {
@@ -1920,6 +1919,17 @@ $('fModel').addEventListener('input', modelSug);
 $('modelSug').addEventListener('pointerdown', e => { if (e.target.closest('[data-md]')) e.preventDefault(); });
 $('modelSug').addEventListener('click', e => { const b = e.target.closest('[data-md]'); if (!b) return; $('fModel').value = b.dataset.md; $('modelSug').classList.add('hidden'); });
 $('fModel').addEventListener('blur', () => setTimeout(() => $('modelSug').classList.add('hidden'), 200));
+function partSug() {
+  const q = $('pName').value.trim().toLowerCase().replace(/\s+/g, '');
+  const box = $('partSug'); if (!q) { box.classList.add('hidden'); return; }
+  const L = parts.filter(x => !isB(x) && x.name.toLowerCase().replace(/\s+/g, '').includes(q)).slice(0, 12);
+  box.innerHTML = L.map(x => `<button type="button" class="chip" data-pn="${esc(x.id)}" style="text-align:left;border-radius:10px;white-space:normal">${esc(x.name)} <small>재고 ${n(x.count)}</small></button>`).join('');
+  box.classList.toggle('hidden', !L.length);
+}
+$('pName').addEventListener('input', partSug);
+$('pName').addEventListener('focus', partSug);
+$('partSug').addEventListener('pointerdown', e => { if (e.target.closest('[data-pn]')) e.preventDefault(); });
+$('partSug').addEventListener('click', e => { const b = e.target.closest('[data-pn]'); const x = b && findP(b.dataset.pn); if (!x) return; $('pName').value = x.name; $('partSug').classList.add('hidden'); $('pAdd').click(); });
 $('pQty').addEventListener('input', e => { e.target.value = digits(e.target.value); });
 $('usedChips').addEventListener('click', e => {
   const sb = e.target.closest('[data-si]');
