@@ -37,7 +37,7 @@ a{color:var(--blue);text-decoration:none}
 .num{font-variant-numeric:tabular-nums}
 
 /* header */
-header.top{position:sticky;top:0;z-index:30;background:var(--nav);color:#fff}
+header.top{position:sticky;top:0;z-index:30;background:var(--nav);color:#fff;padding-top:env(safe-area-inset-top)}
 .top-row{display:flex;align-items:center;gap:10px;padding:10px 0}
 .sub{font-weight:600;opacity:.65;font-size:14px}
 @media(max-width:440px){.sub{display:none}}
@@ -225,7 +225,7 @@ main{padding-top:14px;display:grid;gap:12px}
 .mvq button{width:46px;height:46px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);font-weight:800;font-size:22px}
 .mvq input{width:80px;height:46px;text-align:center;font-size:20px;font-weight:800;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
 /* dialog */
-dialog{border:0;padding:0;background:var(--surface);color:var(--ink);border-radius:20px;width:min(680px,calc(100% - 24px));max-height:92vh;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+dialog{border:0;padding:0;background:var(--surface);color:var(--ink);border-radius:20px;width:min(680px,calc(100% - 24px));max-height:min(92vh,calc(100dvh - 2 * env(safe-area-inset-top) - 24px));box-shadow:0 24px 60px rgba(0,0,0,.4)}
 dialog{overflow:hidden}dialog[open]{display:flex;flex-direction:column}dialog>form{display:flex;flex-direction:column;min-height:0;flex:1}
 dialog::backdrop{background:rgba(8,11,16,.6);backdrop-filter:blur(2px)}
 @media(max-width:640px){dialog{margin:auto 0 0;width:100%;max-width:none;border-radius:22px 22px 0 0;max-height:94vh}}
