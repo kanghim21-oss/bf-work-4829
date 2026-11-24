@@ -429,7 +429,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
   </div>
   <div id="partsPane" class="hidden" style="display:grid;gap:12px;grid-template-columns:minmax(0,1fr)">
     <section class="sum" id="pSum"></section>
-    <div class="pview" id="pView"><button data-pv="stock">📦 재고</button><button data-pv="who">👤 기사별 반출</button></div>
+    <div class="pview" id="pView"><button data-pv="stock">📦 재고</button><button data-pv="who">👤 기사별 반출</button><button data-pv="use">🔧 사용내역</button></div>
     <section class="panel filters" id="pFilters">
       <div class="seg hidden" id="pChips"></div>
       <div class="row"><div class="search"><i>🔍</i><input id="pq" type="search" placeholder="부품명 검색" autocomplete="off"></div></div>
@@ -438,6 +438,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
     <div id="pNote"></div>
     <section id="pList" class="plist"></section>
     <section id="pEmpty" class="panel empty hidden"></section>
+    <section id="pUse" class="hidden" style="display:grid;gap:10px;grid-template-columns:minmax(0,1fr)"></section>
     <section id="pWho" class="hidden" style="display:grid;gap:10px;grid-template-columns:minmax(0,1fr)"></section>
   </div>
 </main>
@@ -1589,14 +1590,52 @@ function renderWho() {
   $('pWho').innerHTML = chips + cards + `<h3 style="margin:6px 2px 0;font-size:14px">반출·반납 내역 <span class="help" style="font-weight:600">· ✕ 누르면 취소(재고 원복)</span></h3>`
     + (hist.length ? hist.map(m => { const k = KIND[m.kind] || KIND.take; return `<div class="panel mrow" data-mid="${esc(m.id)}"><span class="tag ${k[1]}">${k[0]}</span><span class="mt1">${esc(m.partName)} ×${n(m.qty)}<small>${esc(m.worker)} · ${esc(m.date)}${pendM[m.id] ? ' ⏳' : ''}</small></span><button class="x" data-undo aria-label="취소">✕</button></div>`; }).join('') : '<div class="panel empty"><p><b>아직 반출 내역이 없습니다</b></p><p class="help">재고 화면에서 부품의 "👤 반출/반납"을 눌러 기록하세요</p></div>');
 }
+let puDate = null, puW = 'ALL';
+function renderUse() {
+  if (!puDate) puDate = today();
+  const ws = WORKERS.map(w => w.name).filter(w => AUTO_FEE.includes(w));
+  const day = logs.filter(l => l.date === puDate && (l.usedParts || []).length && (puW === 'ALL' || l.worker === puW));
+  const by = {}; day.forEach(l => (by[l.worker] || (by[l.worker] = [])).push(l));
+  const tot = day.reduce((a, l) => a + l.usedParts.reduce((b, u) => b + n(u.price) * n(u.qty), 0), 0);
+  const cnt = day.reduce((a, l) => a + l.usedParts.reduce((b, u) => b + n(u.qty), 0), 0);
+  const names = Object.keys(by).sort((a, b) => ws.indexOf(a) - ws.indexOf(b));
+  $('pUse').innerHTML = `
+    <div class="panel" style="display:grid;gap:10px;padding:12px">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center">
+        <button type="button" class="btn sm" data-pud="-1">◀</button>
+        <input type="date" id="puDate" value="${esc(puDate)}" style="flex:0 1 160px">
+        <button type="button" class="btn sm" data-pud="1">▶</button>
+        <button type="button" class="btn sm" data-pud="0">오늘</button>
+      </div>
+      <div class="seg">${['ALL'].concat(ws).map(w => `<button type="button" class="chip ${puW === w ? 'on' : ''}" data-puw="${esc(w)}">${w === 'ALL' ? '전체' : esc(w)}</button>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;font-weight:800"><span>${puDate.slice(5).replace('-', '/')} 사용 ${fmt(cnt)}개 · ${day.length}건</span><span>합계 ${won(tot)}</span></div>
+    </div>` + (names.length ? names.map(w => `
+    <div class="panel" style="padding:12px;display:grid;gap:8px">
+      <div style="font-weight:800">👤 ${esc(w)} <small style="font-weight:600;opacity:.7">${by[w].length}건 · ${won(by[w].reduce((a, l) => a + l.usedParts.reduce((b, u) => b + n(u.price) * n(u.qty), 0), 0))}</small></div>
+      ${by[w].map(l => `<div data-puopen="${esc(l.id)}" style="border-top:1px solid var(--line);padding-top:8px;cursor:pointer">
+        <div style="font-size:13px;opacity:.75">📍 ${esc(l.address)}${l.customer ? ' · ' + esc(l.customer) : ''}${l.isFree ? ' <b style="color:var(--due)">[무상]</b>' : ''}</div>
+        ${l.usedParts.map(u => `<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(u.name)} <b>×${n(u.qty)}</b></span><span>${n(u.price) ? won(n(u.price) * n(u.qty)) : '-'}</span></div>`).join('')}
+      </div>`).join('')}
+    </div>`).join('') : '<div class="panel empty"><p><b>이 날 사용한 부품이 없습니다</b></p></div>');
+}
+$('pUse').addEventListener('click', e => {
+  const d = e.target.closest('[data-pud]'), w = e.target.closest('[data-puw]'), o = e.target.closest('[data-puopen]');
+  if (d) { const k = +d.dataset.pud; if (!k) puDate = today(); else { const t = new Date(puDate + 'T00:00:00'); t.setDate(t.getDate() + k); puDate = ymd(t); } renderUse(); }
+  else if (w) { puW = w.dataset.puw; renderUse(); }
+  else if (o) { const l = logs.find(x => x.id === o.dataset.puopen); if (l) openForm(l); }
+});
+$('pUse').addEventListener('change', e => { if (e.target.id === 'puDate' && e.target.value) { puDate = e.target.value; renderUse(); } });
 function renderParts() {
   if (document.activeElement && document.activeElement.classList.contains('pcin')) return;
   const PA = parts.filter(p => !isB(p));
-  const who = S.pv === 'who';
+  const who = S.pv === 'who', use = S.pv === 'use';
   document.querySelectorAll('#pView button').forEach(b => b.classList.toggle('on', b.dataset.pv === S.pv));
-  ['pFilters', 'pList'].forEach(id => $(id).classList.toggle('hidden', who));
+  ['pFilters', 'pList'].forEach(id => $(id).classList.toggle('hidden', who || use));
+  $('pSum').classList.toggle('hidden', use);
   $('pWho').classList.toggle('hidden', !who);
+  $('pUse').classList.toggle('hidden', !use);
   if (who) { renderWho(); }
+  if (use) { renderUse(); }
   const HOLD = holdings();
   const pages = [...new Set(PA.map(p => p.page).filter(Boolean))].sort((a, b) => pageRank(a) - pageRank(b));
   if (S.pg !== 'ALL' && !pages.includes(S.pg)) S.pg = 'ALL';
