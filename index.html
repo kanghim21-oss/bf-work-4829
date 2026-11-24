@@ -285,18 +285,18 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
 #printArea{display:none}
 @page{size:A4 landscape;margin:10mm}
 @media print{
-  body{background:#fff!important;color:#000!important;padding:0!important;font-size:11px}
+  body{background:#fff!important;color:#000!important;padding:0!important;font-size:13px}
   body.doprint>*:not(#printArea){display:none!important}
   body.doprint #printArea{display:block!important}
   #printArea .phead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:8px}
   #printArea .phead .pmeta{margin:0}
   #printArea table.psign{width:auto;table-layout:fixed;flex:none}
-  #printArea table.psign th,#printArea table.psign td{width:26mm;font-size:11px;padding:2px 4px}
+  #printArea table.psign th,#printArea table.psign td{width:26mm;font-size:13px;padding:2px 4px}
   #printArea table.psign td{height:16mm}
-  #printArea h1{font-size:16px;margin:0 0 2px}
-  #printArea .pmeta{font-size:11px;margin:0 0 8px;color:#333}
+  #printArea h1{font-size:19px;margin:0 0 2px}
+  #printArea .pmeta{font-size:13px;margin:0 0 8px;color:#333}
   #printArea table{width:100%;border-collapse:collapse;table-layout:fixed}
-  #printArea th,#printArea td{border:1px solid #888;padding:3px 4px;font-size:10.5px;line-height:1.3;vertical-align:top;word-break:break-all;overflow-wrap:anywhere}
+  #printArea th,#printArea td{border:1px solid #888;padding:3px 4px;font-size:13px;line-height:1.3;vertical-align:top;word-break:break-all;overflow-wrap:anywhere}
   #printArea th{background:#eee;text-align:center}
   #printArea td.r{text-align:right;white-space:nowrap}
   #printArea thead{display:table-header-group}
