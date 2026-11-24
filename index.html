@@ -1046,15 +1046,25 @@ function saveForm(e) {
     let k = 0;
     undoUsed.forEach(u => {
       const p = findP(u.id); if (!p) return;
-      p.count = n(p.count) + n(u.qty); pendP[p.id] = 'up'; k += n(u.qty);
-      const mv = [...moves].reverse().find(x => x.kind === 'use' && x.partId === p.id && x.worker === rec.worker && n(x.qty) === n(u.qty));
-      if (mv) { moves = moves.filter(x => x.id !== mv.id); pendM[mv.id] = 'del'; }
+      pendP[p.id] = 'up'; k += n(u.qty);
+      let need = n(u.qty);
+      [...moves].reverse().filter(x => (x.kind === 'use' || x.kind === 'use-office') && x.partId === p.id && x.worker === rec.worker).forEach(mv => {
+        if (need <= 0 || n(mv.qty) > need) return;
+        need -= n(mv.qty); if (mv.kind === 'use-office') p.count = n(p.count) + n(mv.qty);
+        moves = moves.filter(x => x.id !== mv.id); pendM[mv.id] = 'del';
+      });
     });
     savePartsLS(); savePendP(); saveMovesLS(); savePendM(); usedMsg = ` · 재고 ${k}개 복구`;
   }
   if (usedParts.length) {
     let k = 0;
-    usedParts.forEach(u => { const p = findP(u.id); if (p) { p.count = Math.max(0, n(p.count) - u.qty); pendP[p.id] = 'up'; k += u.qty; addMove(p, rec.worker, 'use', u.qty); } });
+    usedParts.forEach(u => {
+      const p = findP(u.id); if (!p) return;
+      const hv = Math.max(0, n(((holdings()[p.id] || {})[rec.worker]) || 0)), fromH = Math.min(u.qty, hv), rest = u.qty - fromH;   // 기사 보유분 먼저, 모자라면 사무실 재고
+      if (fromH) addMove(p, rec.worker, 'use', fromH);
+      if (rest) { p.count = Math.max(0, n(p.count) - rest); addMove(p, rec.worker, 'use-office', rest); }
+      pendP[p.id] = 'up'; k += u.qty;
+    });
     savePartsLS(); savePendP(); usedMsg += ` · 재고 ${k}개 차감`;
   }
   upsertLocal(rec);
@@ -1550,11 +1560,11 @@ const sortParts = a => a.slice().sort((x, y) => pageRank(x.page) - pageRank(y.pa
 const tally = c => { c = n(c); if (c <= 0) return ''; return '正'.repeat(Math.floor(c / 5)) + ['', '一', '丁', '下', '止'][c % 5]; };
 function commitP(id, op) { pendP[id] = op; savePartsLS(); savePendP(); render(); flush(); }
 
-const KIND = { take: ['반출', 'k-take'], return: ['반납', 'k-ret'], use: ['작업사용', 'k-use'] };
-function holdings() {            // { partId: { worker: qty } }, 반출 − 반납
+const KIND = { take: ['반출', 'k-take'], return: ['반납', 'k-ret'], use: ['작업사용', 'k-use'], 'use-office': ['작업사용(사무실)', 'k-use'] };
+function holdings() {            // { partId: { worker: qty } }, 반출 − 반납 − 작업사용
   const h = {};
   for (const m of moves) {
-    if (m.kind !== 'take' && m.kind !== 'return') continue;
+    if (m.kind !== 'take' && m.kind !== 'return' && m.kind !== 'use') continue;   // 작업사용(use)은 기사 보유분에서 차감
     const o = h[m.partId] || (h[m.partId] = {});
     o[m.worker] = (o[m.worker] || 0) + (m.kind === 'take' ? 1 : -1) * n(m.qty);
   }
@@ -1713,7 +1723,7 @@ $('pWho').addEventListener('click', e => {
   const m = moves.find(x => x.id === u.closest('[data-mid]').dataset.mid); if (!m) return;
   if (!confirm(`[${m.worker}] ${m.partName} ×${m.qty} ${(KIND[m.kind] || KIND.take)[0]} 기록을 취소할까요?\n재고도 원래대로 돌아갑니다.`)) return;
   const p = findP(m.partId);
-  if (p) { p.count = Math.max(0, n(p.count) + (m.kind === 'return' ? -m.qty : m.qty)); pendP[p.id] = 'up'; savePartsLS(); savePendP(); }
+  if (p) { p.count = Math.max(0, n(p.count) + (m.kind === 'return' ? -m.qty : m.kind === 'use' ? 0 : m.qty)); pendP[p.id] = 'up'; savePartsLS(); savePendP(); }
   moves = moves.filter(x => x.id !== m.id); pendM[m.id] = 'del'; saveMovesLS(); savePendM(); render(); flush();
 });
 
@@ -2102,7 +2112,7 @@ function auSummary(r) {
   const x = r.new_row || r.old_row || {};
   if (r.tbl === 'work_logs') return [x.worker, x.date, x.address].filter(Boolean).join(' · ');
   if (r.tbl === 'parts') return (x.name || '') + (x.page ? ` (${x.page})` : '');
-  return `${x.worker || ''} · ${x.part_name || ''} ${x.kind === 'return' ? '반납' : '반출'} ${x.qty}개`;
+  return `${x.worker || ''} · ${x.part_name || ''} ${x.kind === 'return' ? '반납' : x.kind === 'use' || x.kind === 'use-office' ? '작업사용' : '반출'} ${x.qty}개`;
 }
 function auChanges(r) {
   const f = AU_FLD[r.tbl] || {}, o = r.old_row || {}, nw = r.new_row || {};
