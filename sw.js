@@ -1,7 +1,7 @@
 /* 보일러팜 작업일지 — 오프라인에서도 열리게 하는 보조 파일
    화면 파일(HTML)은 "인터넷이 되면 항상 최신, 안 되면 저장본" 방식입니다.
    서버(DB) 통신은 절대 저장하지 않고 그대로 통과시킵니다. */
-const CACHE = 'bf-shell-v45';
+const CACHE = 'bf-shell-v46';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
