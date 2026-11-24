@@ -1559,7 +1559,7 @@ function holdings() {            // { partId: { worker: qty } }, 반출 − 반�
   return h;
 }
 function renderWho() {
-  const H = holdings(), ws = WORKERS.map(w => w.name);
+  const H = holdings(), ws = WORKERS.map(w => w.name).filter(w => AUTO_FEE.includes(w));  // 재고 보유 기사: 박병학·신동하·이상민 (나머지는 사무실)
   const sel = S.pw === 'ALL' ? ws : [S.pw];
   const chips = `<div class="seg">${['ALL', ...ws].map(w => `<button class="chip ${S.pw === w ? 'on' : ''}" data-pw="${esc(w)}">${w === 'ALL' ? '전체' : esc(w)}</button>`).join('')}</div>`;
   const cards = sel.map(w => {
@@ -1685,7 +1685,7 @@ function renderMove() {
   const H = (holdings()[p.id] || {})[MV.worker] || 0;
   $('mvTitle').textContent = p.name;
   $('mvInfo').innerHTML = `현재 재고 <b>${n(p.count)}</b>개${MV.worker ? ` · ${esc(MV.worker)} 보유 <b>${Math.max(0, H)}</b>개` : ''}`;
-  $('mvWorkers').innerHTML = WORKERS.map(w => `<button type="button" data-w="${esc(w.name)}" class="${MV.worker === w.name ? 'on' : ''}">${esc(w.name)}</button>`).join('');
+  $('mvWorkers').innerHTML = WORKERS.filter(w => AUTO_FEE.includes(w.name)).map(w => `<button type="button" data-w="${esc(w.name)}" class="${MV.worker === w.name ? 'on' : ''}">${esc(w.name)}</button>`).join('');
   document.querySelectorAll('#mvKind button').forEach(b => b.classList.toggle('on', b.dataset.k === MV.kind));
   $('mvQty').value = MV.qty;
 }
