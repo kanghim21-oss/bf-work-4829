@@ -528,8 +528,9 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
   <div class="dh"><h3 id="mvTitle">부품 반출</h3><button type="button" data-close aria-label="닫기">✕</button></div>
   <div class="db">
     <div id="mvInfo" class="diag info"></div>
-    <div class="f"><label>어느 기사님?</label><div class="mvw" id="mvWorkers"></div></div>
-    <div class="f"><label>구분</label><div class="mvk" id="mvKind"><button data-k="take">📤 가져감</button><button data-k="return">📥 반납</button></div></div>
+    <div class="f"><label id="mvFromLbl">어느 기사님?</label><div class="mvw" id="mvWorkers"></div></div>
+    <div class="f"><label>구분</label><div class="mvk" id="mvKind"><button data-k="take">📤 가져감</button><button data-k="return">📥 반납</button><button data-k="xfer" style="grid-column:1/-1">🔁 기사끼리 이동</button></div></div>
+    <div class="f hidden" id="mvToBox"><label>받는 기사님</label><div class="mvw" id="mvTo"></div></div>
     <div class="f"><label>수량</label><div class="mvq"><button id="mvMinus">−</button><input id="mvQty" inputmode="numeric" value="1"><button id="mvPlus">+</button></div></div>
   </div>
   <div class="df"><button class="btn brand" id="mvOk">확인</button></div>
@@ -1560,13 +1561,13 @@ const sortParts = a => a.slice().sort((x, y) => pageRank(x.page) - pageRank(y.pa
 const tally = c => { c = n(c); if (c <= 0) return ''; return '正'.repeat(Math.floor(c / 5)) + ['', '一', '丁', '下', '止'][c % 5]; };
 function commitP(id, op) { pendP[id] = op; savePartsLS(); savePendP(); render(); flush(); }
 
-const KIND = { take: ['반출', 'k-take'], return: ['반납', 'k-ret'], use: ['작업사용', 'k-use'], 'use-office': ['작업사용(사무실)', 'k-use'] };
+const KIND = { take: ['반출', 'k-take'], return: ['반납', 'k-ret'], use: ['작업사용', 'k-use'], 'xfer-out': ['이동 보냄', 'k-ret'], 'xfer-in': ['이동 받음', 'k-take'], 'use-office': ['작업사용(사무실)', 'k-use'] };
 function holdings() {            // { partId: { worker: qty } }, 반출 − 반납 − 작업사용
   const h = {};
   for (const m of moves) {
-    if (m.kind !== 'take' && m.kind !== 'return' && m.kind !== 'use') continue;   // 작업사용(use)은 기사 보유분에서 차감
+    if (!['take', 'return', 'use', 'xfer-out', 'xfer-in'].includes(m.kind)) continue;   // 작업사용(use)은 기사 보유분에서 차감
     const o = h[m.partId] || (h[m.partId] = {});
-    o[m.worker] = (o[m.worker] || 0) + (m.kind === 'take' ? 1 : -1) * n(m.qty);
+    o[m.worker] = (o[m.worker] || 0) + (m.kind === 'take' || m.kind === 'xfer-in' ? 1 : -1) * n(m.qty);
   }
   return h;
 }
@@ -1697,12 +1698,18 @@ function renderMove() {
   const H = (holdings()[p.id] || {})[MV.worker] || 0;
   $('mvTitle').textContent = p.name;
   $('mvInfo').innerHTML = `현재 재고 <b>${n(p.count)}</b>개${MV.worker ? ` · ${esc(MV.worker)} 보유 <b>${Math.max(0, H)}</b>개` : ''}`;
-  $('mvWorkers').innerHTML = WORKERS.filter(w => AUTO_FEE.includes(w.name)).map(w => `<button type="button" data-w="${esc(w.name)}" class="${MV.worker === w.name ? 'on' : ''}">${esc(w.name)}</button>`).join('');
+  const xf = MV.kind === 'xfer', STK = WORKERS.filter(w => AUTO_FEE.includes(w.name));
+  $('mvFromLbl').textContent = xf ? '보내는 기사님' : '어느 기사님?';
+  $('mvToBox').classList.toggle('hidden', !xf);
+  if (xf && MV.to === MV.worker) MV.to = '';
+  $('mvTo').innerHTML = STK.filter(w => w.name !== MV.worker).map(w => `<button type="button" data-t="${esc(w.name)}" class="${MV.to === w.name ? 'on' : ''}">${esc(w.name)}</button>`).join('');
+  $('mvWorkers').innerHTML = STK.map(w => `<button type="button" data-w="${esc(w.name)}" class="${MV.worker === w.name ? 'on' : ''}">${esc(w.name)}</button>`).join('');
   document.querySelectorAll('#mvKind button').forEach(b => b.classList.toggle('on', b.dataset.k === MV.kind));
   $('mvQty').value = MV.qty;
 }
-function openMove(pid) { MV = { pid, worker: S.worker !== 'ALL' ? S.worker : '', kind: 'take', qty: 1 }; renderMove(); $('dlgMove').showModal(); }
+function openMove(pid) { MV = { pid, worker: S.worker !== 'ALL' ? S.worker : '', to: '', kind: 'take', qty: 1 }; renderMove(); $('dlgMove').showModal(); }
 $('mvWorkers').addEventListener('click', e => { const b = e.target.closest('[data-w]'); if (b) { MV.worker = b.dataset.w; renderMove(); } });
+$('mvTo').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) { MV.to = b.dataset.t; renderMove(); } });
 $('mvKind').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) { MV.kind = b.dataset.k; renderMove(); } });
 $('mvMinus').onclick = () => { MV.qty = Math.max(1, n($('mvQty').value) - 1); renderMove(); };
 $('mvPlus').onclick = () => { MV.qty = n($('mvQty').value) + 1; renderMove(); };
@@ -1710,6 +1717,15 @@ $('mvOk').onclick = () => {
   const p = findP(MV.pid); if (!p) return;
   const q = Math.max(1, Math.floor(n($('mvQty').value))); MV.qty = q;
   if (!MV.worker) return toast('기사님을 선택하세요');
+  if (MV.kind === 'xfer') {
+    if (!MV.to) return toast('받는 기사님을 선택하세요');
+    const have = Math.max(0, n(((holdings()[p.id] || {})[MV.worker]) || 0));
+    if (q > have) return toast(`${MV.worker} 보유(${have}개)보다 많이 보낼 수 없습니다`);
+    const base = 'm-x' + uid(), now = new Date().toISOString(), mk = (suf, worker, kind) => ({ id: base + suf, partId: p.id, partName: p.name, worker, qty: q, kind, date: today(), createdAt: now });
+    [mk('-o', MV.worker, 'xfer-out'), mk('-i', MV.to, 'xfer-in')].forEach(m => { moves.push(m); pendM[m.id] = 'up'; });
+    saveMovesLS(); savePendM(); $('dlgMove').close(); render(); flush();
+    toast(`${MV.worker} → ${MV.to} · ${p.name} ${q}개 이동`); return;
+  }
   if (MV.kind === 'take' && q > n(p.count)) return toast(`재고(${n(p.count)}개)보다 많이 가져갈 수 없습니다`);
   p.count = Math.max(0, n(p.count) + (MV.kind === 'take' ? -q : q));
   addMove(p, MV.worker, MV.kind, q);
@@ -1722,9 +1738,10 @@ $('pWho').addEventListener('click', e => {
   const u = e.target.closest('[data-undo]'); if (!u) return;
   const m = moves.find(x => x.id === u.closest('[data-mid]').dataset.mid); if (!m) return;
   if (!confirm(`[${m.worker}] ${m.partName} ×${m.qty} ${(KIND[m.kind] || KIND.take)[0]} 기록을 취소할까요?\n재고도 원래대로 돌아갑니다.`)) return;
-  const p = findP(m.partId);
-  if (p) { p.count = Math.max(0, n(p.count) + (m.kind === 'return' ? -m.qty : m.kind === 'use' ? 0 : m.qty)); pendP[p.id] = 'up'; savePartsLS(); savePendP(); }
-  moves = moves.filter(x => x.id !== m.id); pendM[m.id] = 'del'; saveMovesLS(); savePendM(); render(); flush();
+  const p = findP(m.partId), xf = m.kind === 'xfer-out' || m.kind === 'xfer-in';
+  if (p && !xf) { p.count = Math.max(0, n(p.count) + (m.kind === 'return' ? -m.qty : m.kind === 'use' ? 0 : m.qty)); pendP[p.id] = 'up'; savePartsLS(); savePendP(); }
+  const gone = [m.id]; if (xf) gone.push(m.id.replace(/-[oi]$/, m.id.endsWith('-o') ? '-i' : '-o'));
+  moves = moves.filter(x => !gone.includes(x.id)); gone.forEach(id => { pendM[id] = 'del'; }); saveMovesLS(); savePendM(); render(); flush();
 });
 
 /* 동기화 (part_moves) */
@@ -2112,7 +2129,7 @@ function auSummary(r) {
   const x = r.new_row || r.old_row || {};
   if (r.tbl === 'work_logs') return [x.worker, x.date, x.address].filter(Boolean).join(' · ');
   if (r.tbl === 'parts') return (x.name || '') + (x.page ? ` (${x.page})` : '');
-  return `${x.worker || ''} · ${x.part_name || ''} ${x.kind === 'return' ? '반납' : x.kind === 'use' || x.kind === 'use-office' ? '작업사용' : '반출'} ${x.qty}개`;
+  return `${x.worker || ''} · ${x.part_name || ''} ${x.kind === 'return' ? '반납' : x.kind === 'use' || x.kind === 'use-office' ? '작업사용' : x.kind === 'xfer-out' ? '이동(보냄)' : x.kind === 'xfer-in' ? '이동(받음)' : '반출'} ${x.qty}개`;
 }
 function auChanges(r) {
   const f = AU_FLD[r.tbl] || {}, o = r.old_row || {}, nw = r.new_row || {};
