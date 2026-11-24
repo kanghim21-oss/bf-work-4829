@@ -1387,7 +1387,9 @@ $('dNext').onclick = () => { const b = S.from && S.from === S.to ? S.from : toda
 $('q').addEventListener('input', e => { S.q = e.target.value; render(); });
 $('dueFilter').onclick = () => { S.onlyDue = !S.onlyDue; if (S.onlyDue) { S.from = null; S.to = null; } render(); };
 document.querySelector('.vt').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { S.view = b.dataset.v; wr(LS.view, S.view); render(); } });
-$('fab').onclick = () => openForm(null);
+$('fab').onclick = () => { try { openForm(null); if (!$('dlgForm').open) $('dlgForm').showModal(); } catch (e) { toast('작업등록 오류: ' + (e && e.message || e)); } };
+let _errAt = 0;
+window.addEventListener('error', ev => { if (Date.now() - _errAt < 4000) return; _errAt = Date.now(); try { toast('오류: ' + (ev.message || '알 수 없음') + (ev.lineno ? ' (줄 ' + ev.lineno + ')' : '')); } catch (e) {} });
 function rowAct(e) {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const id = b.closest('[data-id]').dataset.id;
