@@ -1061,7 +1061,8 @@ function saveForm(e) {
     });
     savePartsLS(); savePendP(); saveMovesLS(); savePendM(); usedMsg = ` · 재고 ${k}개 복구`;
   }
-  if (usedParts.length) {
+  if (usedParts.length && rec.date < STOCK_START) usedMsg += ' · 11/23 이전 일지라 재고는 차감하지 않음';
+  else if (usedParts.length) {
     let k = 0;
     usedParts.forEach(u => {
       const p = findP(u.id); if (!p) return;
@@ -1838,6 +1839,7 @@ function startMovesRealtime() {
 }
 
 /* 작업 등록 시 사용 부품 */
+const STOCK_START = '2026-11-23';   // 이 날짜 이전 일지는 재고 자동 차감 안 함
 let usedParts = [], partsBase = 0, savedUsed = [], undoUsed = [];
 const usedSum = () => usedParts.reduce((a, u) => a + n(u.price) * u.qty, 0);
 function syncPartsCost() { if (!usedParts.some(u => u.price) && !usedSum()) { setM('fParts', partsBase); } else setM('fParts', partsBase + usedSum()); updateLive(); autoFee(); }
