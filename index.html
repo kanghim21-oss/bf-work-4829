@@ -263,6 +263,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
 
 /* toast */
 .toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--nav);color:#fff;padding:11px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-weight:700;font-size:14px;z-index:99;display:flex;gap:12px;align-items:center;opacity:0;pointer-events:none;transition:.22s;max-width:calc(100% - 28px)}
+.toast{margin:0;border:0;inset:auto;left:50%;overflow:visible}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .toast button{color:var(--brand);font-weight:800}
 .modes{display:flex;gap:6px;padding:0 0 8px}
@@ -532,10 +533,9 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
     <div class="f"><label id="mvFromLbl">어느 기사님?</label><div class="mvw" id="mvWorkers"></div></div>
     <div class="f"><label>구분</label><div class="mvk" id="mvKind"><button data-k="take">📤 가져감</button><button data-k="return">📥 반납</button><button data-k="xfer" style="grid-column:1/-1">🔁 기사끼리 이동</button></div></div>
     <div class="f hidden" id="mvToBox"><label>받는 기사님</label><div class="mvw" id="mvTo"></div></div>
-    <div id="mvMsg" class="diag warn hidden" role="alert"></div>
     <div class="f"><label>수량</label><div class="mvq"><button id="mvMinus">−</button><input id="mvQty" inputmode="numeric" value="1"><button id="mvPlus">+</button></div></div>
   </div>
-  <div class="df"><button class="btn brand" id="mvOk">확인</button></div>
+  <div class="df" style="flex-direction:column;align-items:stretch;gap:10px"><div id="mvMsg" class="diag bad hidden" role="alert" style="font-size:16px;font-weight:800;border:2px solid currentColor"></div><button class="btn brand" id="mvOk">확인</button></div>
 </dialog>
 
 <!-- 월 수당 -->
@@ -580,7 +580,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
   </div>
 </dialog>
 
-<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastAct" class="hidden"></button></div>
+<div class="toast" id="toast" popover="manual"><span id="toastMsg"></span><button id="toastAct" class="hidden"></button></div>
 <input type="file" id="fileIn" accept=".json,application/json" class="hidden">
 
 <div id="printArea"></div>
@@ -909,9 +909,10 @@ function toast(msg, act) {
   const b = $('toastAct');
   b.classList.toggle('hidden', !act);
   if (act) { b.textContent = act.label; b.onclick = () => { act.fn(); $('toast').classList.remove('show'); }; }
-  $('toast').classList.add('show');
+  const T = $('toast'); try { if (T.showPopover && !T.matches(':popover-open')) T.showPopover(); } catch (e) {}
+  T.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $('toast').classList.remove('show'), act ? 6500 : 2600);
+  toastTimer = setTimeout(() => { T.classList.remove('show'); try { T.hidePopover && T.matches(':popover-open') && T.hidePopover(); } catch (e) {} }, act ? 6500 : 3600);
 }
 
 /* ============================================================
@@ -1736,7 +1737,7 @@ function addMove(p, worker, kind, qty) {
   moves.push(m); pendM[m.id] = 'up'; saveMovesLS(); savePendM(); return m;
 }
 let MV = { pid: '', worker: '', kind: 'take', qty: 1 };
-const mvWarn = t => { $('mvMsg').textContent = t; $('mvMsg').classList.remove('hidden'); toast(t); };   // 팝업 뒤에 가려지는 토스트 대신 팝업 안에도 표시
+const mvWarn = t => { const m = $('mvMsg'); m.textContent = '⚠️ ' + t; m.classList.remove('hidden'); m.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(0)'}],{duration:260,iterations:2}); try { m.scrollIntoView({block:'nearest'}); } catch (e) {} };   // 팝업 뒤에 가려지는 토스트 대신 팝업 안에도 표시
 function renderMove() {
   const p = findP(MV.pid); if (!p) return;
   if (!MV.keepMsg) $('mvMsg').classList.add('hidden'); MV.keepMsg = false;
