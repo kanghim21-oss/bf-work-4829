@@ -532,6 +532,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
     <div class="f"><label id="mvFromLbl">어느 기사님?</label><div class="mvw" id="mvWorkers"></div></div>
     <div class="f"><label>구분</label><div class="mvk" id="mvKind"><button data-k="take">📤 가져감</button><button data-k="return">📥 반납</button><button data-k="xfer" style="grid-column:1/-1">🔁 기사끼리 이동</button></div></div>
     <div class="f hidden" id="mvToBox"><label>받는 기사님</label><div class="mvw" id="mvTo"></div></div>
+    <div id="mvMsg" class="diag warn hidden" role="alert"></div>
     <div class="f"><label>수량</label><div class="mvq"><button id="mvMinus">−</button><input id="mvQty" inputmode="numeric" value="1"><button id="mvPlus">+</button></div></div>
   </div>
   <div class="df"><button class="btn brand" id="mvOk">확인</button></div>
@@ -1734,8 +1735,10 @@ function addMove(p, worker, kind, qty) {
   moves.push(m); pendM[m.id] = 'up'; saveMovesLS(); savePendM(); return m;
 }
 let MV = { pid: '', worker: '', kind: 'take', qty: 1 };
+const mvWarn = t => { $('mvMsg').textContent = t; $('mvMsg').classList.remove('hidden'); toast(t); };   // 팝업 뒤에 가려지는 토스트 대신 팝업 안에도 표시
 function renderMove() {
   const p = findP(MV.pid); if (!p) return;
+  if (!MV.keepMsg) $('mvMsg').classList.add('hidden'); MV.keepMsg = false;
   const H = (holdings()[p.id] || {})[MV.worker] || 0;
   $('mvTitle').textContent = p.name;
   $('mvInfo').innerHTML = `현재 재고 <b>${n(p.count)}</b>개${MV.worker ? ` · ${esc(MV.worker)} 보유 <b>${Math.max(0, H)}</b>개` : ''}`;
@@ -1757,17 +1760,17 @@ $('mvPlus').onclick = () => { MV.qty = n($('mvQty').value) + 1; renderMove(); };
 $('mvOk').onclick = () => {
   const p = findP(MV.pid); if (!p) return;
   const q = Math.max(1, Math.floor(n($('mvQty').value))); MV.qty = q;
-  if (!MV.worker) return toast('기사님을 선택하세요');
+  if (!MV.worker) return mvWarn('기사님을 선택하세요');
   if (MV.kind === 'xfer') {
-    if (!MV.to) return toast('받는 기사님을 선택하세요');
+    if (!MV.to) return mvWarn('받는 기사님을 선택하세요');
     const have = Math.max(0, n(((holdings()[p.id] || {})[MV.worker]) || 0));
-    if (q > have) return toast(`${MV.worker} 보유(${have}개)보다 많이 보낼 수 없습니다`);
+    if (q > have) return mvWarn(`${MV.worker} 보유(${have}개)보다 많이 보낼 수 없습니다`);
     const base = 'm-x' + uid(), now = new Date().toISOString(), mk = (suf, worker, kind) => ({ id: base + suf, partId: p.id, partName: p.name, worker, qty: q, kind, date: today(), createdAt: now });
     [mk('-o', MV.worker, 'xfer-out'), mk('-i', MV.to, 'xfer-in')].forEach(m => { moves.push(m); pendM[m.id] = 'up'; });
     saveMovesLS(); savePendM(); $('dlgMove').close(); render(); flush();
     toast(`${MV.worker} → ${MV.to} · ${p.name} ${q}개 이동`); return;
   }
-  if (MV.kind === 'take' && q > n(p.count)) return toast(`재고(${n(p.count)}개)보다 많이 가져갈 수 없습니다`);
+  if (MV.kind === 'take' && q > n(p.count)) return mvWarn(n(p.count) > 0 ? `사무실 재고(${n(p.count)}개)보다 많이 가져갈 수 없습니다` : '사무실 재고가 0개라 가져갈 수 없습니다. 다른 기사님이 갖고 있다면 "🔁 기사끼리 이동"을 쓰세요.');
   p.count = Math.max(0, n(p.count) + (MV.kind === 'take' ? -q : q));
   addMove(p, MV.worker, MV.kind, q);
   $('dlgMove').close(); commitP(p.id, 'up'); flush();
