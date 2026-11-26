@@ -1435,7 +1435,7 @@ $('fSales').addEventListener('change', () => { feeManual = false; if (!$('fSales
 $('matChips').addEventListener('click', e => { const b = e.target.closest('[data-mat]'); if (!b) return; matQty[b.dataset.mat] = (matQty[b.dataset.mat] || 0) + 1; feeManual = false; applyMats(); });
 $('matSel').addEventListener('click', e => { if (e.target.id === 'matReset') { matQty = {}; applyMats(); } });
 renderMats();
-$('fFree').addEventListener('change', e => { if (e.target.checked) { moneyIds.forEach(id => $(id).value = ''); updateLive(); } feeManual = false; autoFee(); });
+$('fFree').addEventListener('change', e => { if (e.target.checked) { moneyIds.filter(id => id !== 'fParts').forEach(id => $(id).value = ''); setM('fParts', partsBase + usedSum()); updateLive(); } feeManual = false; autoFee(); });
 $('reasonChips').innerHTML = REASONS.map(r => `<button type="button">${r}</button>`).join('');
 $('reasonChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const f = $('fReason'); f.value = f.value ? f.value + ', ' + b.textContent : b.textContent; f.focus(); });
 $('dueCash').onclick = () => collectDue('cash'); $('dueAcct').onclick = () => collectDue('account');
