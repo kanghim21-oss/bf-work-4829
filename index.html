@@ -1554,7 +1554,7 @@ const PARTS_SEED = [];
 Object.assign(LS, { parts: 'bf_parts_v1', pendP: 'bf_pendp_v1', mode: 'bf_mode_v1' });
 let parts = rd(LS.parts, []);
 let pendP = rd(LS.pendP, {});
-Object.assign(S, { mode: rd(LS.mode, 'logs'), pg: 'ALL', pq: '', pv: 'stock', pw: 'ALL' });
+Object.assign(S, { mode: rd(LS.mode, 'logs'), pg: 'ALL', pq: '', pv: 'stock', pw: 'ALL', pk: 'all' });
 Object.assign(LS, { moves: 'bf_moves_v1', pendM: 'bf_pendm_v1' });
 let moves = rd(LS.moves, []);
 let pendM = rd(LS.pendM, {});
@@ -1591,9 +1591,20 @@ function renderWho() {
     return `<div class="panel whoc"><h4>${esc(w)} <span class="help" style="font-weight:600">· 보유 중 ${tot}개 (${items.length}종)</span></h4>
       ${items.length ? items.map(i => `<div class="it"><span>${esc(i.name)}</span><b>×${i.q}</b></div>`).join('') : '<span class="help">가져간 부품이 없습니다</span>'}</div>`;
   }).join('');
-  const hist = moves.filter(m => S.pw === 'ALL' || m.worker === S.pw).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 150);
-  $('pWho').innerHTML = chips + cards + `<h3 style="margin:6px 2px 0;font-size:14px">반출·반납 내역 <span class="help" style="font-weight:600">· ✕ 누르면 취소(재고 원복)</span></h3>`
-    + (hist.length ? hist.map(m => { const k = KIND[m.kind] || KIND.take; return `<div class="panel mrow" data-mid="${esc(m.id)}"><span class="tag ${k[1]}">${k[0]}</span><span class="mt1">${esc(m.partName)} ×${n(m.qty)}<small>${esc(m.worker)} · ${esc(m.date)}${pendM[m.id] ? ' ⏳' : ''}</small></span><button class="x" data-undo aria-label="취소">✕</button></div>`; }).join('') : '<div class="panel empty"><p><b>아직 반출 내역이 없습니다</b></p><p class="help">재고 화면에서 부품의 "👤 반출/반납"을 눌러 기록하세요</p></div>');
+  const mid = new Map(moves.map(m => [m.id, m])), partner = m => mid.get(m.id.replace(/-[oi]$/, m.id.endsWith('-o') ? '-i' : '-o'));
+  const isX = m => m.kind === 'xfer-out' || m.kind === 'xfer-in';
+  const hist = moves.filter(m => !(m.kind === 'xfer-in' && partner(m)))   // 이동은 보낸 쪽 한 줄로 합쳐 보여줌 (보냄→받음)
+    .filter(m => S.pk === 'all' || isX(m))
+    .filter(m => S.pw === 'ALL' || m.worker === S.pw || (m.kind === 'xfer-out' && (partner(m) || {}).worker === S.pw))
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 150);
+  const kseg = `<div class="seg" style="margin-top:4px">${[['all', '전체 내역'], ['xfer', '🔁 기사끼리 이동만']].map(([k, t]) => `<button class="chip ${S.pk === k ? 'on' : ''}" data-pk="${k}">${t}</button>`).join('')}</div>`;
+  const row = m => {
+    const pt = m.kind === 'xfer-out' ? partner(m) : null;
+    if (pt) return `<div class="panel mrow" data-mid="${esc(m.id)}"><span class="tag k-take">이동</span><span class="mt1">${esc(m.partName)} ×${n(m.qty)}<small><b>${esc(m.worker)} → ${esc(pt.worker)}</b> · ${esc(m.date)}${pendM[m.id] ? ' ⏳' : ''}</small></span><button class="x" data-undo aria-label="취소">✕</button></div>`;
+    const k = KIND[m.kind] || KIND.take; return `<div class="panel mrow" data-mid="${esc(m.id)}"><span class="tag ${k[1]}">${k[0]}</span><span class="mt1">${esc(m.partName)} ×${n(m.qty)}<small>${esc(m.worker)} · ${esc(m.date)}${pendM[m.id] ? ' ⏳' : ''}</small></span><button class="x" data-undo aria-label="취소">✕</button></div>`;
+  };
+  $('pWho').innerHTML = chips + cards + `<h3 style="margin:6px 2px 0;font-size:14px">반출·반납 내역 <span class="help" style="font-weight:600">· ✕ 누르면 취소(재고 원복)</span></h3>` + kseg
+    + (hist.length ? hist.map(row).join('') : `<div class="panel empty"><p><b>${S.pk === 'xfer' ? '기사끼리 이동한 내역이 없습니다' : '아직 반출 내역이 없습니다'}</b></p><p class="help">재고 화면에서 부품의 "👤 반출/반납"을 눌러 기록하세요</p></div>`);
 }
 let puDate = null, puW = 'ALL';
 function renderUse() {
@@ -1783,9 +1794,11 @@ $('mvOk').onclick = () => {
 $('pView').addEventListener('click', e => { const b = e.target.closest('[data-pv]'); if (b) { S.pv = b.dataset.pv; render(); } });
 $('pWho').addEventListener('click', e => {
   const c = e.target.closest('[data-pw]'); if (c) { S.pw = c.dataset.pw; render(); return; }
+  const kk = e.target.closest('[data-pk]'); if (kk) { S.pk = kk.dataset.pk; render(); return; }
   const u = e.target.closest('[data-undo]'); if (!u) return;
   const m = moves.find(x => x.id === u.closest('[data-mid]').dataset.mid); if (!m) return;
-  if (!confirm(`[${m.worker}] ${m.partName} ×${m.qty} ${(KIND[m.kind] || KIND.take)[0]} 기록을 취소할까요?\n재고도 원래대로 돌아갑니다.`)) return;
+  const pt0 = m.kind === 'xfer-out' ? moves.find(x => x.id === m.id.replace(/-o$/, '-i')) : null;
+  if (!confirm(pt0 ? `[${m.worker} → ${pt0.worker}] ${m.partName} ×${m.qty} 이동 기록을 취소할까요?\n두 기사님 보유가 원래대로 돌아갑니다.` : `[${m.worker}] ${m.partName} ×${m.qty} ${(KIND[m.kind] || KIND.take)[0]} 기록을 취소할까요?\n재고도 원래대로 돌아갑니다.`)) return;
   const p = findP(m.partId), xf = m.kind === 'xfer-out' || m.kind === 'xfer-in';
   if (p && !xf) { p.count = Math.max(0, n(p.count) + (m.kind === 'return' ? -m.qty : m.kind === 'use' ? 0 : m.qty)); pendP[p.id] = 'up'; savePartsLS(); savePendP(); }
   const gone = [m.id]; if (xf) gone.push(m.id.replace(/-[oi]$/, m.id.endsWith('-o') ? '-i' : '-o'));
