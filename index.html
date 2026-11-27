@@ -504,6 +504,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
       </div>
       <label class="freebox hidden" id="salesBox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (수리 없이 교체를 권유해 성공한 건 · 체크하면 수당이 50,000원 고정, 다른 금액과 합산되지 않음)</label>
       <label class="freebox hidden" id="tripBox" style="margin-top:2px"><input type="checkbox" id="fTrip">기본출장비 23,000원 (체크하면 수당이 10,350원 고정 · 부가세 제외 후 반반, 다른 금액과 합산되지 않음)</label>
+      <div id="tripPlus" class="hidden" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 2px"><button type="button" class="btn sm" id="tripAdd">+10,000원 추가</button><button type="button" class="btn sm" id="tripSub" aria-label="한 번 빼기">−</button><span id="tripTxt" class="help"></span></div>
       <p class="help hidden" id="legacyInst"></p>
     </div>
     <div class="df">
@@ -671,7 +672,9 @@ const pad = x => String(x).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => ymd(new Date());
 const addDays = (s, k) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + k); return ymd(d); };
-const SALES_FEE = 50000, TRIP_FEE = 10350;   // 기본출장비 23,000원 → 부가세 제외 후 반반
+const SALES_FEE = 50000, TRIP_BASE = 23000, TRIP_STEP = 10000;   // 기본출장비 23,000원 (+10,000원씩 추가) → 부가세 제외 후 반반
+let tripN = 0;
+const tripAmt = k => TRIP_BASE + TRIP_STEP * k, tripFee = k => Math.round(tripAmt(k) * 0.9 / 2);
 const fee = l => n(l.allowance) + n(l.installFee) + n(l.salesFee);
 const paid = l => n(l.cash) + n(l.account) + n(l.card);
 const digits = s => String(s || '').replace(/\D/g, '');
@@ -976,7 +979,8 @@ function instUI() {
 function autoFee() {
   instUI();
   if ($('fSales').checked) { $('fFee').value = fmt(SALES_FEE); $('fFee').readOnly = true; $('feeHint').textContent = '영업비 건 — 수당 50,000원 고정 (다른 금액과 합산 안 됨)'; $('feeHint').classList.remove('hidden'); return; }
-  if ($('fTrip').checked) { $('fFee').value = fmt(TRIP_FEE); $('fFee').readOnly = true; $('feeHint').textContent = '기본출장비 건 — 수당 10,350원 고정 (23,000원 ÷ 2, 부가세 제외 후 반반)'; $('feeHint').classList.remove('hidden'); return; }
+  $('tripPlus').classList.toggle('hidden', !$('fTrip').checked);
+  if ($('fTrip').checked) { $('fFee').value = fmt(tripFee(tripN)); $('fFee').readOnly = true; $('tripTxt').textContent = `출장비 ${fmt(tripAmt(tripN))}원 → 수당 ${fmt(tripFee(tripN))}원 (부가세 제외 후 반반)`; $('feeHint').textContent = `기본출장비 건 — 수당 ${fmt(tripFee(tripN))}원 고정 (${fmt(tripAmt(tripN))}원 × 0.9 ÷ 2)`; $('feeHint').classList.remove('hidden'); return; }
   $('fFee').readOnly = false;
   if (INST_W.includes($('fWorker').value) && $('fInst').checked && !$('fFree').checked) {
     if (feeManual) return;
@@ -1030,7 +1034,7 @@ function openForm(l, presetWorker) {
   $('fDep').value = v.depositor || ''; $('fMemo').value = v.cardMemo || '';
   setM('fParts', v.partsPrice); setM('fFee', v.allowance);
   $('fSales').checked = n(v.salesFee) > 0;
-  $('fTrip').checked = !!l && !v.isFree && n(v.allowance) === TRIP_FEE && (n(v.cash) + n(v.account) + n(v.card)) === 23000 && !n(v.partsPrice) && !n(v.salesFee) && !n(v.installFee);
+  { const paid = n(v.cash) + n(v.account) + n(v.card), k = Math.round((paid - TRIP_BASE) / TRIP_STEP); tripN = 0; const ok = !!l && !v.isFree && paid >= TRIP_BASE && (paid - TRIP_BASE) % TRIP_STEP === 0 && k <= 9 && n(v.allowance) === tripFee(k) && !n(v.partsPrice) && !n(v.salesFee) && !n(v.installFee); $('fTrip').checked = ok; if (ok) tripN = k; }
   $('legacyInst').textContent = n(v.installFee) ? `이 건에는 기존 설치수당 ${fmt(v.installFee)}원이 수당 합계에 포함되어 있습니다.` : '';
   $('legacyInst').classList.toggle('hidden', !n(v.installFee));
   feeManual = false; $('fInst').checked = false; $('fExtra').value = ''; $('fMat').value = ''; matQty = {}; renderMats();
@@ -1436,7 +1440,9 @@ moneyIds.concat(['dueAmtIn'], moneyIds2).forEach(id => $(id).addEventListener('i
 $('fWorker').addEventListener('change', () => { feeManual = false; autoFee(); });
 $('fInst').addEventListener('change', () => { feeManual = false; autoFee(); });
 $('fSales').addEventListener('change', () => { if ($('fSales').checked) $('fTrip').checked = false; feeManual = false; if (!$('fSales').checked) $('fFee').value = ''; autoFee(); });
-$('fTrip').addEventListener('change', () => { if ($('fTrip').checked) { $('fSales').checked = false; if ($('fFree').checked) $('fFree').checked = false; } feeManual = false; if (!$('fTrip').checked) $('fFee').value = ''; autoFee(); });
+$('tripAdd').onclick = () => { if (tripN < 9) tripN++; autoFee(); };
+$('tripSub').onclick = () => { if (tripN > 0) tripN--; autoFee(); };
+$('fTrip').addEventListener('change', () => { if ($('fTrip').checked) { tripN = 0; $('fSales').checked = false; if ($('fFree').checked) $('fFree').checked = false; } feeManual = false; if (!$('fTrip').checked) $('fFee').value = ''; autoFee(); });
 $('matChips').addEventListener('click', e => { const b = e.target.closest('[data-mat]'); if (!b) return; matQty[b.dataset.mat] = (matQty[b.dataset.mat] || 0) + 1; feeManual = false; applyMats(); });
 $('matSel').addEventListener('click', e => { if (e.target.id === 'matReset') { matQty = {}; applyMats(); } });
 renderMats();
