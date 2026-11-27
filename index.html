@@ -503,6 +503,7 @@ pre.report{background:var(--surface2);border:1px solid var(--line);padding:14px;
         <div class="f"><label for="fFee">기사수당 *</label><input id="fFee" class="money fee-in" inputmode="numeric" placeholder="0"><span id="feeHint" class="help hidden">자동 계산됨 · 직접 고치면 그 금액으로 저장</span></div>
       </div>
       <label class="freebox hidden" id="salesBox" style="margin-top:2px"><input type="checkbox" id="fSales">영업비 50,000원 (수리 없이 교체를 권유해 성공한 건 · 체크하면 수당이 50,000원 고정, 다른 금액과 합산되지 않음)</label>
+      <label class="freebox hidden" id="tripBox" style="margin-top:2px"><input type="checkbox" id="fTrip">기본출장비 23,000원 (체크하면 수당이 10,350원 고정 · 부가세 제외 후 반반, 다른 금액과 합산되지 않음)</label>
       <p class="help hidden" id="legacyInst"></p>
     </div>
     <div class="df">
@@ -670,7 +671,7 @@ const pad = x => String(x).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => ymd(new Date());
 const addDays = (s, k) => { const d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + k); return ymd(d); };
-const SALES_FEE = 50000;
+const SALES_FEE = 50000, TRIP_FEE = 10350;   // 기본출장비 23,000원 → 부가세 제외 후 반반
 const fee = l => n(l.allowance) + n(l.installFee) + n(l.salesFee);
 const paid = l => n(l.cash) + n(l.account) + n(l.card);
 const digits = s => String(s || '').replace(/\D/g, '');
@@ -969,11 +970,13 @@ function instUI() {
   $('instIn').classList.toggle('hidden', !($('fInst').checked && w));
   const sw = AUTO_FEE.includes($('fWorker').value);
   $('salesBox').classList.toggle('hidden', !sw);
-  if (!sw) $('fSales').checked = false;
+  if (!sw) { $('fSales').checked = false; $('fTrip').checked = false; }
+  $('tripBox').classList.toggle('hidden', !sw);
 }
 function autoFee() {
   instUI();
   if ($('fSales').checked) { $('fFee').value = fmt(SALES_FEE); $('fFee').readOnly = true; $('feeHint').textContent = '영업비 건 — 수당 50,000원 고정 (다른 금액과 합산 안 됨)'; $('feeHint').classList.remove('hidden'); return; }
+  if ($('fTrip').checked) { $('fFee').value = fmt(TRIP_FEE); $('fFee').readOnly = true; $('feeHint').textContent = '기본출장비 건 — 수당 10,350원 고정 (23,000원 ÷ 2, 부가세 제외 후 반반)'; $('feeHint').classList.remove('hidden'); return; }
   $('fFee').readOnly = false;
   if (INST_W.includes($('fWorker').value) && $('fInst').checked && !$('fFree').checked) {
     if (feeManual) return;
@@ -1027,6 +1030,7 @@ function openForm(l, presetWorker) {
   $('fDep').value = v.depositor || ''; $('fMemo').value = v.cardMemo || '';
   setM('fParts', v.partsPrice); setM('fFee', v.allowance);
   $('fSales').checked = n(v.salesFee) > 0;
+  $('fTrip').checked = !!l && !v.isFree && n(v.allowance) === TRIP_FEE && (n(v.cash) + n(v.account) + n(v.card)) === 23000 && !n(v.partsPrice) && !n(v.salesFee) && !n(v.installFee);
   $('legacyInst').textContent = n(v.installFee) ? `이 건에는 기존 설치수당 ${fmt(v.installFee)}원이 수당 합계에 포함되어 있습니다.` : '';
   $('legacyInst').classList.toggle('hidden', !n(v.installFee));
   feeManual = false; $('fInst').checked = false; $('fExtra').value = ''; $('fMat').value = ''; matQty = {}; renderMats();
@@ -1431,11 +1435,12 @@ moneyIds.concat(['dueAmtIn'], moneyIds2).forEach(id => $(id).addEventListener('i
 }));
 $('fWorker').addEventListener('change', () => { feeManual = false; autoFee(); });
 $('fInst').addEventListener('change', () => { feeManual = false; autoFee(); });
-$('fSales').addEventListener('change', () => { feeManual = false; if (!$('fSales').checked) $('fFee').value = ''; autoFee(); });
+$('fSales').addEventListener('change', () => { if ($('fSales').checked) $('fTrip').checked = false; feeManual = false; if (!$('fSales').checked) $('fFee').value = ''; autoFee(); });
+$('fTrip').addEventListener('change', () => { if ($('fTrip').checked) { $('fSales').checked = false; if ($('fFree').checked) $('fFree').checked = false; } feeManual = false; if (!$('fTrip').checked) $('fFee').value = ''; autoFee(); });
 $('matChips').addEventListener('click', e => { const b = e.target.closest('[data-mat]'); if (!b) return; matQty[b.dataset.mat] = (matQty[b.dataset.mat] || 0) + 1; feeManual = false; applyMats(); });
 $('matSel').addEventListener('click', e => { if (e.target.id === 'matReset') { matQty = {}; applyMats(); } });
 renderMats();
-$('fFree').addEventListener('change', e => { if (e.target.checked) { moneyIds.filter(id => id !== 'fParts').forEach(id => $(id).value = ''); setM('fParts', partsBase + usedSum()); updateLive(); } feeManual = false; autoFee(); });
+$('fFree').addEventListener('change', e => { if (e.target.checked) { $('fTrip').checked = false; moneyIds.filter(id => id !== 'fParts').forEach(id => $(id).value = ''); setM('fParts', partsBase + usedSum()); updateLive(); } feeManual = false; autoFee(); });
 $('reasonChips').innerHTML = REASONS.map(r => `<button type="button">${r}</button>`).join('');
 $('reasonChips').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const f = $('fReason'); f.value = f.value ? f.value + ', ' + b.textContent : b.textContent; f.focus(); });
 $('dueCash').onclick = () => collectDue('cash'); $('dueAcct').onclick = () => collectDue('account');
